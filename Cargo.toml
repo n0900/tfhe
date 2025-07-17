@@ -4,3 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+bitvec = "1.0.1"
+ff = { version = "0.13.1", features = ["derive"] }
+num-primes = "0.3.0"
+rand = "0.9.1"
