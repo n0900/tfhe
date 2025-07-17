@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 bitvec = "1.0.1"
-ff = { version = "0.13.1", features = ["derive", "bits"] }
+ff = { version = "0.13.1", features = ["bits","derive","derive_bits"] }
 num-primes = "0.3.0"
+once_cell = "1.21.3"
 rand = "0.9.1"

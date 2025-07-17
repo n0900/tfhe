@@ -1,6 +1,7 @@
 pub mod misc;
 pub mod field;
-
+use ff::PrimeFieldBits;
+use crate::field::Fp;
 // fn secret_key_gen(params) {
 //     return todo!()
 // }
@@ -20,9 +21,11 @@ pub mod field;
 // fn mp_dec(params, sk, c) {
 //     return todo!()
 // }
+fn assert_bits<T: ff::PrimeFieldBits>(_: &T) {}
 
 fn main() {
-    println!("Hello, world!");
-    let x = field::Fp::from(1u64);
-    // bit_decomp()
+    let x = Fp::from(42u64);
+    assert_bits(&x); // This will fail to compile if Fp doesn't implement PrimeFieldBits
+    let bits = x.to_le_bits();
+    println!("{:?}", bits);
 }
