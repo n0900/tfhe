@@ -1,5 +1,11 @@
 use crate::field::{Fp, GADGET_VECTOR, L};
 use ff::{Field, PrimeField, PrimeFieldBits};
+use rand::Rng;
+
+pub fn rnd_fp_vec(size: u8, min: u64, max: u64) -> Vec<Fp> {
+    let mut rng = rand::rng();
+    (0..size).map(|_| Fp::from(rng.random_range(min..max))).collect()
+}
 
 /// BitDecomp: Expand every Fp entry into bit representation and
 /// output a.len()*L =: N-dim array of Fp::ZERO and Fp::ONE entries.
@@ -85,6 +91,12 @@ pub fn matrix_vector_fp(matrix: &Vec<Vec<Fp>>, vector: &Vec<Fp>) -> Vec<Fp> {
         })
         .collect()
 }
+
+pub fn vec_vec_fp_add(a: &Vec<Fp>, b: &Vec<Fp>) -> Vec<Fp> {
+    assert_eq!(a.len(), b.len());
+    a.iter().zip(b.iter()).map(|(x, y)| *x + *y).collect()
+}
+
 
 pub fn matrix_matrix_fp(a: &Vec<Vec<Fp>>, b: &Vec<Vec<Fp>>) -> Vec<Vec<Fp>> {
     let a_rows = a.len();
