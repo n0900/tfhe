@@ -1,11 +1,15 @@
 pub mod misc;
 pub mod field;
+pub mod sk;
 use ff::PrimeFieldBits;
-use crate::field::Fp;
-// fn secret_key_gen(params) {
-//     return todo!()
-// }
+use rand::Rng;
+use crate::{field::{Fp, P}, sk::SK};
 
+fn sk_gen(n: u8) -> SK {
+    let mut rng = rand::rng();
+    let t = (0..n).map(|_| Fp::from(rng.random_range(0..P))).collect();
+    SK::new(t)
+}
 // fn public_key_gen(params, sk) {
 //     return todo!()
 // }
