@@ -2,8 +2,13 @@ use ff::{PrimeField};
 use once_cell::sync::Lazy;
 
 #[derive(PrimeField)]
-#[PrimeFieldModulus = "2147483647"]
-#[PrimeFieldGenerator = "3"]
+// 32-ish bit prime
+// #[PrimeFieldModulus = "2147483647"]
+// #[PrimeFieldGenerator = "3"]
+
+// 64-ish bit prime
+#[PrimeFieldModulus = "1152921504606846971"]
+#[PrimeFieldGenerator = "2"]
 #[PrimeFieldReprEndianness = "little"]
 
 pub struct Fp([u64; 1]);
@@ -15,4 +20,3 @@ pub static GADGET_VECTOR: Lazy<Vec<Fp>> = Lazy::new(|| {
         .map(|l| Fp::from(1u64 << l))
         .collect()
 });
-

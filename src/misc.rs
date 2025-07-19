@@ -1,29 +1,36 @@
 use crate::field::{Fp, GADGET_VECTOR, L};
-use bitvec::{prelude::*, vec::BitVec};
 use ff::{Field, PrimeField, PrimeFieldBits};
 
-/// BitDecomp: little endian bit decomposition
-/// Take vector and enforce little endianness
-/// a.len() == k; l is implicit
-pub fn bit_decomp(a: &[Fp]) -> BitVec<u8, Lsb0> {
-    let total_bits = a.len() * L;
-    let mut bv = BitVec::<u8, Lsb0>::with_capacity(total_bits);
-    for elm in a {
-        bv.extend(elm.to_le_bits().iter().take(L));
+/// BitDecomp: Expand every Fp entry into bit representation and
+/// output a.len()*L =: N-dim array of Fp::ZERO and Fp::ONE entries.
+/// in little endian.
+pub fn bit_decomp(a: &Vec<Fp>) -> Vec<Fp> {
+    let mut bv = Vec::with_capacity(a.len() * L);
+    for elm in a.iter() {
+        for b in elm.to_le_bits().iter().take(L) {
+            bv.push(if *b { Fp::ONE } else { Fp::ZERO });
+        }
     }
     bv
 }
 
-/// Careful this only works up to 64 bits and then becomes annoying!
-pub fn bit_decomp_inv(bits: &BitVec<u8, Lsb0>) -> Vec<Fp> {
+/// "When A is a matrix, let BitDecomp(A), BitDecomp−1 , or Flatten(A) be 
+/// the matrix formed by applying the operation to each row of A separately"
+pub fn bit_decomp_matrix(a_matrix: &Vec<Vec<Fp>>) -> Vec<Vec<Fp>> {
+    a_matrix.iter().map(|a| 
+    bit_decomp(a)).collect()
+}
+
+/// Inverse operation; only supports [u64;1] for now but could be expanded.
+pub fn bit_decomp_inv(bits: &Vec<Fp>) -> Vec<Fp> {
     bits.chunks(L)
         .map(|chunk| {
             // Convert chunk into little-endian u64 representation
-            let mut repr = 0u64; // because Fp uses [u64;1] in your definition
+            let mut repr = 0u64; // because Fp uses [u64;1]
 
             // Fill bits into repr[0]
             for (i, bit) in chunk.iter().enumerate() {
-                if *bit {
+                if *bit == Fp::ONE {
                     repr |= 1 << i;
                 }
             }
@@ -32,12 +39,26 @@ pub fn bit_decomp_inv(bits: &BitVec<u8, Lsb0>) -> Vec<Fp> {
         .collect()
 }
 
-pub fn flatten(bits: &BitVec<u8, Lsb0>) -> BitVec<u8, Lsb0> {
-    bit_decomp(&bit_decomp_inv(bits))
+/// "When A is a matrix, let BitDecomp(A), BitDecomp−1 , or Flatten(A) be 
+/// the matrix formed by applying the operation to each row of A separately"
+pub fn bit_decomp_inv_matrix(a_matrix: &Vec<Vec<Fp>>) -> Vec<Vec<Fp>> {
+    a_matrix.iter().map(|a| 
+    bit_decomp_inv(a)).collect()
+}
+
+pub fn flatten(bits: &Vec<Fp>) -> Vec<Fp> {
+    bit_decomp(&bit_decomp_inv(&bits))
+}
+
+/// "When A is a matrix, let BitDecomp(A), BitDecomp−1 , or Flatten(A) be 
+/// the matrix formed by applying the operation to each row of A separately"
+pub fn flatten_matrix(a_matrix: &Vec<Vec<Fp>>) -> Vec<Vec<Fp>> {
+    a_matrix.iter().map(|a| 
+    flatten(a)).collect()
 }
 
 /// PowersOf2: (b_1, 2b_1, ..., 2^{l-1}b_1, ..., b_k, ..., 2^{l-1}b_k)
-pub fn powers_of_2(b: &[Fp]) -> Vec<Fp> {
+pub fn powers_of_2(b: &Vec<Fp>) -> Vec<Fp> {
     let mut out = Vec::with_capacity(b.len() * GADGET_VECTOR.len());
     for x in b {
         for g in GADGET_VECTOR.iter() {
@@ -47,55 +68,43 @@ pub fn powers_of_2(b: &[Fp]) -> Vec<Fp> {
     out
 }
 
-/// Compute l = floor(log2(q)) + 1
-pub fn calc_l(q: u64) -> usize {
-    64 - q.leading_zeros() as usize
+// Helper: dot product over field elements
+pub fn dot_product_fp(a: &Vec<Fp>, b: &Vec<Fp>) -> Fp {
+    assert_eq!(a.len(), b.len());
+    a.iter().zip(b.iter()).fold(Fp::ZERO, |acc, (x, y)| acc + (*x * *y))
 }
 
-/// BitDecomp: little endian bit decomposition
-/// Take vector and enforce little endianness
-/// a.len() == k; l = floor(log2(q)) + 1
-pub fn bit_decomp_u64(a: &[u64], l: usize) -> BitVec<u64, Lsb0> {
-    let mut bv = bitvec![u64, Lsb0;];
-    for &x in a {
-        let x_le = x.to_le();
-        bv.extend(&x_le.view_bits::<Lsb0>()[..l]);
-    }
-    bv
-}
+pub fn matrix_vector_fp(matrix: &Vec<Vec<Fp>>, vector: &Vec<Fp>) -> Vec<Fp> {
+    assert!(matrix.iter().all(|row| row.len() == vector.len()), "Matrix column count must match vector length");
 
-/// BitDecomp^-1: reconstruct from little endian bit decomposition
-pub fn bit_decomp_inv_u64(bits: &BitVec<u64, Lsb0>, l: usize) -> Vec<u64> {
-    bits.chunks(l)
-        .map(|chunk| {
-            let mut acc = 0u64;
-            for (i, bit) in chunk.iter().enumerate() {
-                if *bit {
-                    acc |= 1 << i;
-                }
-            }
-            acc
+    matrix.iter()
+        .map(|row| {
+            row.iter()
+                .zip(vector.iter())
+                .fold(Fp::ZERO, |acc, (x, y)| acc + (*x * *y))
         })
         .collect()
 }
 
-pub fn flatten_u64(bits: &BitVec<u64, Lsb0>, l: usize) -> BitVec<u64, Lsb0> {
-    bit_decomp_u64(&bit_decomp_inv_u64(bits, l), l)
+pub fn matrix_matrix_fp(a: &Vec<Vec<Fp>>, b: &Vec<Vec<Fp>>) -> Vec<Vec<Fp>> {
+    let a_rows = a.len();
+    let a_cols = if a_rows > 0 { a[0].len() } else { 0 };
+    let b_rows = b.len();
+    let b_cols = if b_rows > 0 { b[0].len() } else { 0 };
+
+    assert!(a_cols == b_rows, "Incompatible dimensions: a_cols must equal b_rows");
+
+    (0..a_rows).map(|i| {
+        (0..b_cols).map(|j| {
+            let mut sum = Fp::ZERO;
+            for k in 0..a_cols {
+                sum += a[i][k] * b[k][j];
+            }
+            sum
+        }).collect()
+    }).collect()
 }
 
-// Helper: dot product over field elements
-pub fn dot_product_fp(a: &[Fp], b: &[Fp]) -> Fp {
-    assert_eq!(a.len(), b.len());
-    a.iter().zip(b).fold(Fp::ZERO, |acc, (x, y)| acc + (*x * *y))
-}
-
-// Helper: dot product between BitVec and Vec<Fp>
-pub fn dot_product_bit_fp(bits: &BitVec<u8, Lsb0>, fp_vec: &[Fp]) -> Fp {
-    assert_eq!(bits.len(), fp_vec.len());
-    bits.iter()
-        .zip(fp_vec)
-        .fold(Fp::ZERO, |acc, (bit, f)| if *bit { acc + *f } else { acc })
-}
 
 #[cfg(test)]
 mod tests {
@@ -119,33 +128,11 @@ mod tests {
 
             // Perform bit decomposition
             let decomposed = bit_decomp(&input);
+            assert_eq!(decomposed.len(), input.len()*L);
 
             // Reconstruct
             let reconstructed = bit_decomp_inv(&decomposed);
-
-            // Check roundtrip correctness
-            assert_eq!(input, reconstructed);
-        }
-    }
-
-    #[test]
-    fn test_bit_decomp_and_inv_with_random_inputs() {
-        for i in 0..10 {
-            let mut rng = rand::rng();
-            // Generate 3 random u64 inputs
-            let input: Vec<u64> = (0..10).map(|_| rng.random::<u64>().to_le() >> i).collect();
-            let l = input.iter().map(|&x| calc_l(x)).max().unwrap();
-            println!("input = {:?}", input);
-            println!("l = {}", l);
-
-            // Perform bit decomposition
-            let decomposed = bit_decomp_u64(&input, l);
-
-            // Check decomposition length
-            assert_eq!(decomposed.len(), input.len() * l);
-
-            // Reconstruct
-            let reconstructed = bit_decomp_inv_u64(&decomposed, l);
+            assert_eq!(reconstructed.len(), input.len());
 
             // Check roundtrip correctness
             assert_eq!(input, reconstructed);
@@ -169,13 +156,56 @@ mod tests {
             assert_eq!(bd_a.len(), po2_b.len(), "Length mismatch in decomp vs powers_of_two.");
 
             // Compute both scalar products
-            let dot_decomp = dot_product_bit_fp(&bd_a, &po2_b);
+            let dot_decomp = dot_product_fp(&bd_a, &po2_b);
             let dot_ab = dot_product_fp(&a, &b);
             println!("Dot_Decomp {:?} = {:?} Dot_Ab", dot_decomp, dot_ab);
 
             // Assert equivalence
             assert_eq!(dot_decomp, dot_ab, "Scalar product invariant failed.");
         }
+    }
+
+    #[test]
+    fn test_scalar_product_fp() {
+        let a = vec![Fp::from(1), Fp::from(2), Fp::from(3)];
+        let b = vec![Fp::from(4), Fp::from(5), Fp::from(6)];
+        let result = dot_product_fp(&a, &b);
+        assert_eq!(result, Fp::from(32)); // 1*4 + 2*5 + 3*6 = 32
+    }
+
+    #[test]
+    fn test_matrix_vector_fp() {
+        let matrix = vec![
+            vec![Fp::from(1), Fp::from(2), Fp::from(3)],
+            vec![Fp::from(4), Fp::from(5), Fp::from(6)],
+        ];
+        let vector = vec![Fp::from(7), Fp::from(8), Fp::from(9)];
+
+        let result = matrix_vector_fp(&matrix, &vector);
+        let expected = vec![
+            Fp::from(50), // 1*7 + 2*8 + 3*9
+            Fp::from(122), // 4*7 + 5*8 + 6*9
+        ];
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_matrix_matrix_multiplication_fp() {
+        let a = vec![
+            vec![Fp::from(1), Fp::from(2)],
+            vec![Fp::from(3), Fp::from(4)],
+        ];
+        let b = vec![
+            vec![Fp::from(5), Fp::from(6)],
+            vec![Fp::from(7), Fp::from(8)],
+        ];
+
+        let result = matrix_matrix_fp(&a, &b);
+        let expected = vec![
+            vec![Fp::from(19), Fp::from(22)], // [1*5 + 2*7, 1*6 + 2*8]
+            vec![Fp::from(43), Fp::from(50)], // [3*5 + 4*7, 3*6 + 4*8]
+        ];
+        assert_eq!(result, expected);
     }
 
 }
