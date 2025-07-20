@@ -117,6 +117,16 @@ pub fn matrix_matrix_fp(a: &Vec<Vec<Fp>>, b: &Vec<Vec<Fp>>) -> Vec<Vec<Fp>> {
     }).collect()
 }
 
+//more efficient addition of \mu * I_n
+pub fn add_to_diagonal(a: &Vec<Vec<Fp>>, mu: Fp) -> Vec<Vec<Fp>> {
+    a.iter().enumerate().map(| (i, row) |
+        {
+        let mut new_row = row.clone();
+        new_row[i] = new_row[i] + mu;
+        new_row
+    }).collect()
+}
+
 
 #[cfg(test)]
 mod tests {
