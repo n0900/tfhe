@@ -6,7 +6,7 @@ use crate::{field::Fp, misc::matrix_vector_fp, misc::vec_vec_fp_add};
 /// (B,e as well for testing purposes!!)
 /// b = Bt+e
 /// pk = b||B
-pub struct PK {
+pub struct GswPk {
     pub b: Vec<Fp>,
     pub A: Vec<Vec<Fp>>
 }
@@ -15,7 +15,7 @@ pub struct PK {
 /// B mxn-dim random matrix \in \mathbb(Z)_p
 /// e error vector \in \mathbb(Z)_p
 /// t == SK.t
-impl PK {
+impl GswPk {
         pub fn new(B: &Vec<Vec<Fp>>, e: &Vec<Fp>, t: &Vec<Fp>) -> Self {
         let b = vec_vec_fp_add(&matrix_vector_fp(&B, &t), &e);
 

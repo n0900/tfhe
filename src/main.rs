@@ -2,19 +2,23 @@ pub mod misc;
 pub mod field;
 pub mod sk;
 pub mod pk;
-use crate::{field::{Fp, P}, misc::{add_to_diagonal, bit_decomp_matrix, flatten_matrix, matrix_matrix_fp, rnd_fp_vec}, pk::PK, sk::SK};
+use std::ops::Mul;
 
-pub fn sk_gen(n: u8) -> SK {
-    SK::new(rnd_fp_vec(n,0,P))
-}
+use ff::{PrimeField};
 
-pub fn pk_gen(n: u8, err: &Vec<Fp>, sk: &SK) -> PK {
+use crate::{field::{Fp, L, P}, misc::{add_to_diagonal, bit_decomp_matrix, dot_product_fp, flatten_matrix, matrix_matrix_fp, rnd_fp_vec}, pk::{GswPk}, sk::GswSk};
+
+//TODO add error distribution as parameter
+pub fn gsw_keygen(n: u8, m: u8) -> (GswSk, GswPk) {
+    let sk = GswSk::new(rnd_fp_vec(n,0,P));
+    let err = rnd_fp_vec(m, 0, 10);
     let B: Vec<Vec<Fp>> = (0..err.len()).map(|_| rnd_fp_vec(n, 0, P)).collect();
-    PK::new(&B,&err, &sk.t)
+    let pk = GswPk::new(&B,&err, &sk.t);
+    (sk, pk)
 }
 
-pub fn enc(n: u8, m: u8, pk: &PK, mu: Fp) -> Vec<Vec<Fp>> {
-    let N = (n+1) * m;
+pub fn enc(n: u8, m: u8, pk: &GswPk, mu: Fp) -> Vec<Vec<Fp>> {
+    let N : usize= L.mul((n+1) as usize);
     let R = (0..N).map(|_| rnd_fp_vec(m, 0, 1)).collect();
     let temp = matrix_matrix_fp(&R, &pk.A);
     let temp2 = bit_decomp_matrix(&temp);
@@ -22,32 +26,58 @@ pub fn enc(n: u8, m: u8, pk: &PK, mu: Fp) -> Vec<Vec<Fp>> {
     flatten_matrix(&temp3)
 }
 
-// fn dec(params, sk, c) {
-//     return todo!()
-// }
+pub fn dec(sk: &GswSk, C: Vec<Vec<Fp>>) -> Fp {
+    let i = 63 -((P-1)/3).leading_zeros() as usize; //efficient log2((P-1)/3)
+    let temp= dot_product_fp(&C[i], &sk.v);
+    let test  = u64::from_le_bytes(temp.to_repr().0);
+    let v_test = u64::from_le_bytes(sk.v[i].to_repr().0);
+    Fp::from(test/v_test)
+}
 
-// fn mp_dec(params, sk, c) {
-//     return todo!()
-// }
 
 fn main() {
+    
 }
 
 
 #[cfg(test)]
 mod tests {
-    use crate::{misc::{matrix_vector_fp, rnd_fp_vec}, pk_gen, sk_gen};
+    use ff::{derive, Field};
+
+    use crate::field::P;
+    use crate::pk::GswPk;
+    use crate::sk::GswSk;
+    use crate::{dec, enc, gsw_keygen};
+    use crate::{field::Fp};
+    use crate::{misc::{matrix_vector_fp, rnd_fp_vec}};
     #[test]
-    fn pk_invariant() {
+    fn sk_pk_invariant() {
         let n = 10;
         let m = 5;
-        let err = rnd_fp_vec(m, 0, 10);  //TODO replace with real err dist
-        let sk = sk_gen(n);
-        let pk = pk_gen(n, &err, &sk);
-
+        
+        let sk = GswSk::new(rnd_fp_vec(n,0,P));
+        let err = rnd_fp_vec(m, 0, 10);
+        let B: Vec<Vec<Fp>> = (0..err.len()).map(|_| rnd_fp_vec(n, 0, P)).collect();
+        let pk = GswPk::new(&B,&err, &sk.t);
         let invariant = matrix_vector_fp(&pk.A, &sk.s);
 
         // As = e
         assert_eq!(invariant, err);
+    }
+
+    #[test]
+    fn encryption_decryption() {
+        let n = 10;
+        let m = 5;
+        
+        let (sk, pk) = gsw_keygen(n, m);
+
+        let encr = enc(n, m, &pk, Fp::ZERO);
+        let decr = dec(&sk, encr);
+        assert_eq!(decr, Fp::ZERO);
+
+        let encr = enc(n, m, &pk, Fp::ONE);
+        let decr = dec(&sk, encr);
+        assert_eq!(decr, Fp::ONE);
     }
 }

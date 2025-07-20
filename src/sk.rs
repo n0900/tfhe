@@ -8,13 +8,13 @@ use crate::misc::powers_of_2;
 /// t n-dim random vector \in \mathbb(Z)_p
 /// s (1, -t_1, -t_2,...) \in \mathbb(Z)_p
 /// v = powers_of_two(s)
-pub struct SK {
+pub struct GswSk {
     pub t: Vec<Fp>,
     pub s: Vec<Fp>,
     pub v: Vec<Fp>,
 }
 
-impl SK {
+impl GswSk {
     pub fn new(t: Vec<Fp>) -> Self {
         let mut s = Vec::with_capacity(t.len() + 1);
         s.push(Fp::ONE);
