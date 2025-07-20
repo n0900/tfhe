@@ -137,26 +137,20 @@ mod tests {
 
     #[test]
     fn gadget_vector_has_correct_size() {
-        println!("Fp::NUM_BITS {}", Fp::NUM_BITS);
         assert_eq!(GADGET_VECTOR.len(), Fp::NUM_BITS as usize)
     }
     #[test]
     fn test_bit_decomp_and_inv_for_field() {
         for _ in 0..10 {
             let mut rng = rand::rng();
-            // Generate 3 random u64 inputs
             let input: Vec<Fp> = (0..10).map(|_| Fp::from(rng.random::<u64>())).collect();
-            println!("input = {:?}", input);
 
-            // Perform bit decomposition
             let decomposed = bit_decomp(&input);
             assert_eq!(decomposed.len(), input.len()*L);
 
-            // Reconstruct
             let reconstructed = bit_decomp_inv(&decomposed);
             assert_eq!(reconstructed.len(), input.len());
 
-            // Check roundtrip correctness
             assert_eq!(input, reconstructed);
         }
     }
@@ -166,23 +160,16 @@ mod tests {
         let mut rng = rand::rng();
         
         for _ in 0..10{
-            // Generate random input vectors a and b
             let a: Vec<Fp> = (0..10).map(|_| Fp::from(rng.random::<u64>())).collect();
             let b: Vec<Fp> = (0..10).map(|_| Fp::from(rng.random::<u64>())).collect();
 
-            // Compute BitDecomp(a) and PowersOf2(b)
             let bd_a = bit_decomp(&a);
             let po2_b = powers_of_2(&b);
-
-            // Ensure lengths match for scalar product
             assert_eq!(bd_a.len(), po2_b.len(), "Length mismatch in decomp vs powers_of_two.");
 
-            // Compute both scalar products
             let dot_decomp = dot_product_fp(&bd_a, &po2_b);
             let dot_ab = dot_product_fp(&a, &b);
-            println!("Dot_Decomp {:?} = {:?} Dot_Ab", dot_decomp, dot_ab);
 
-            // Assert equivalence
             assert_eq!(dot_decomp, dot_ab, "Scalar product invariant failed.");
         }
     }
