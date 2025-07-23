@@ -1,4 +1,3 @@
-use ff::Field;
 use crate::{field::Fp, misc::matrix_vector_fp, misc::vec_vec_fp_add};
 
 

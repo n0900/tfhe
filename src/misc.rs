@@ -1,5 +1,5 @@
 use crate::field::{Fp, GADGET_VECTOR, L};
-use ff::{Field, PrimeField, PrimeFieldBits};
+use ff::{Field, PrimeFieldBits};
 use rand::Rng;
 
 pub fn rnd_fp_vec(size: u8, min: u64, max: u64) -> Vec<Fp> {
@@ -132,6 +132,7 @@ pub fn add_to_diagonal(a: &Vec<Vec<Fp>>, mu: Fp) -> Vec<Vec<Fp>> {
 mod tests {
     use crate::field::GADGET_VECTOR;
     use crate::field::Fp;
+    use ff::PrimeField;
     use rand::{Rng};
     use super::*;
 
