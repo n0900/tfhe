@@ -17,16 +17,16 @@ use crate::{
 
 //TODO add error distribution as parameter
 pub fn gsw_keygen(n: u8, m: u8) -> (GswSk, GswPk) {
-    let sk = GswSk::new(rnd_fp_vec(n, 0, P));
-    let err = rnd_fp_vec(m, 0, 10);
-    let B: Vec<Vec<Fp>> = (0..err.len()).map(|_| rnd_fp_vec(n, 0, P)).collect();
+    let sk = GswSk::new(rnd_fp_vec(n as usize, 0, P-1));
+    let err = rnd_fp_vec(m as usize, 0, 10);
+    let B: Vec<Vec<Fp>> = (0..err.len()).map(|_| rnd_fp_vec(n as usize, 0, P-1)).collect();
     let pk = GswPk::new(&B, &err, &sk.t);
     (sk, pk)
 }
 
 pub fn gsw_enc(n: u8, m: u8, pk: &GswPk, mu: Fp) -> Vec<Vec<Fp>> {
     let N: usize = L.mul((n + 1) as usize);
-    let R = (0..N).map(|_| rnd_fp_vec(m, 0, 1)).collect();
+    let R = (0..N).map(|_| rnd_fp_vec(m as usize, 0, 1)).collect();
     flatten_matrix(
         &add_to_diagonal(
             &bit_decomp_matrix(
@@ -60,9 +60,9 @@ mod tests {
         let n = 10;
         let m = 5;
 
-        let sk = GswSk::new(rnd_fp_vec(n, 0, P));
+        let sk = GswSk::new(rnd_fp_vec(n, 0, P-1));
         let err = rnd_fp_vec(m, 0, 10);
-        let B: Vec<Vec<Fp>> = (0..err.len()).map(|_| rnd_fp_vec(n, 0, P)).collect();
+        let B: Vec<Vec<Fp>> = (0..err.len()).map(|_| rnd_fp_vec(n, 0, P-1)).collect();
         let pk = GswPk::new(&B, &err, &sk.t);
         let invariant = matrix_vector_fp(&pk.A, &sk.s);
 
