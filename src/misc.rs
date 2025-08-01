@@ -1,10 +1,16 @@
-use crate::field::{Fp, GADGET_VECTOR, L};
+use crate::field::{Fp, GADGET_VECTOR, L, P};
 use ff::{Field, PrimeFieldBits};
 use rand::Rng;
 
 pub fn rnd_fp_vec(size: usize, min: u64, max: u64) -> Vec<Fp> {
     let mut rng = rand::rng();
-    (0..size).map(|_| Fp::from(rng.random_range(min..max))).collect()
+    (0..size).map(|_| rnd_fp(min, max)).collect()
+}
+
+pub fn rnd_fp(min: u64, max: u64) -> Fp {
+    assert!(max <= P);
+    let mut rng = rand::rng();
+    Fp::from(rng.random_range(min..max))
 }
 
 /// BitDecomp: Expand every Fp entry into bit representation and

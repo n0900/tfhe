@@ -23,3 +23,16 @@ pub static GADGET_VECTOR: Lazy<Vec<Fp>> = Lazy::new(|| {
         .map(|l| Fp::from(1u64 << l))
         .collect()
 });
+
+#[cfg(test)]
+mod tests {
+    use ff::Field;
+    use crate::field::Fp;
+
+    #[test]
+    fn inverse_test() {
+        let one = Fp::ONE;
+        let minus_one = -one;
+        assert_eq!(one+minus_one, Fp::ZERO);
+    }
+}
