@@ -1,12 +1,14 @@
-use crate::{field::Fp, gsw::pk::GswPk, zo_sss::Party};
+use crate::{field::Fp, gsw::{gsw_keygen, pk::GswPk}, zo_sss::{dimacs::{DIMACS, DIMACS_2_OF_3_SCHEME}, Party}};
 
 pub mod field;
 pub mod misc;
 pub mod gsw;
 pub mod zo_sss;
 
-pub fn tfhe_setup() {
-    todo!()
+pub fn tfhe_setup(dimacs_formula: &str, n: u8, m: u8) {
+    let (sk, pk) = gsw_keygen(n, m);
+    let dimacs = DIMACS::parse(&dimacs_formula);
+
 }
 
 /// # Parameters:
