@@ -86,7 +86,7 @@ fn build_w(secret: Fp, num: usize) -> Vec<Fp> {
     w
 }
 
-/// Assumes parties are numbered 0 to N-1 and that they have the same number of sets of shares.
+/// Assumes parties are named 1 to N and that they have the same number of sets of shares.
 /// Finds a minimum-cardinality subset of parties 
 /// satisfying the {0,1}-LSSS property.
 ///
