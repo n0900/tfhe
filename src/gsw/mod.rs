@@ -6,44 +6,66 @@ use std::ops::Mul;
 use ff::PrimeField;
 
 use crate::{
-    field::{Fp, L, P},
-    misc::{
+    error_sampling::{ErrorSampling, NaiveSampling}, field::{Fp, L, P}, gsw::{pk::GswPk, sk::GswSk}, misc::{
         add_to_diagonal, bit_decomp_matrix, dot_product_fp, flatten_matrix, matrix_matrix_fp,
         rnd_fp_vec,
-    },
-    gsw::pk::GswPk,
-    gsw::sk::GswSk,
+    }
 };
 
-//TODO add error distribution as parameter
-pub fn gsw_keygen(n: u8, m: u8) -> (GswSk, GswPk) {
-    let sk = GswSk::new(rnd_fp_vec(n as usize, 0, P-1));
-    let err = rnd_fp_vec(m as usize, 0, 10);
-    let B: Vec<Vec<Fp>> = (0..err.len()).map(|_| rnd_fp_vec(n as usize, 0, P-1)).collect();
-    let pk = GswPk::new(&B, &err, &sk.t);
-    (sk, pk)
+pub struct GSW<T: ErrorSampling> {
+    n: u8,
+    m: u8,
+    err_sampling: T,
 }
 
-pub fn gsw_enc(n: u8, m: u8, pk: &GswPk, mu: Fp) -> Vec<Vec<Fp>> {
-    let N: usize = L.mul((n + 1) as usize);
-    let R = (0..N).map(|_| rnd_fp_vec(m as usize, 0, 1)).collect();
-    flatten_matrix(
-        &add_to_diagonal(
-            &bit_decomp_matrix(
-                &matrix_matrix_fp(&R, &pk.A)
-            ),
-            mu
+pub static  NAIVE_GSW: GSW<NaiveSampling> = GSW { n: 10, m: 10, err_sampling: NaiveSampling{} };
+
+pub trait FheScheme {
+    type SecretKey;
+    type PublicKey;
+
+    fn keygen(&self) -> (Self::SecretKey, Self::PublicKey);
+    fn encrypt(&self, pk: &GswPk, message: Fp) -> Vec<Vec<Fp>>;
+    fn decrypt(&self, sk: &GswSk, cipher_matrix: Vec<Vec<Fp>>) -> Fp;
+    fn eval();
+}
+
+impl<T: ErrorSampling> FheScheme for GSW<T> {
+    type SecretKey = GswSk;
+    type PublicKey = GswPk;
+
+    fn keygen(&self) -> (Self::SecretKey, Self::PublicKey) {
+        let sk = GswSk::new(rnd_fp_vec(self.n as usize, 0, P-1));
+        let err = self.err_sampling.rnd_fp_vec(self.m as usize);
+        let B: Vec<Vec<Fp>> = (0..err.len()).map(|_| rnd_fp_vec(self.n as usize, 0, P-1)).collect();
+        let pk = GswPk::new(&B, &err, &sk.t);
+        (sk, pk)   
+    }
+
+    fn encrypt(&self, pk: &GswPk, message: Fp) -> Vec<Vec<Fp>> {
+        let N: usize = L.mul((self.n + 1) as usize);
+        let R = (0..N).map(|_| rnd_fp_vec(self.m as usize, 0, 1)).collect();
+        flatten_matrix(
+            &add_to_diagonal(
+                &bit_decomp_matrix(
+                    &matrix_matrix_fp(&R, &pk.A)
+                ),
+                message
+            )
         )
-    )
-}
+    }
 
-pub fn gsw_dec(sk: &GswSk, C: Vec<Vec<Fp>>) -> Fp {
-    let i = 63 - (P / 3).leading_zeros() as usize; //efficient log2(P/3)
-    let x_i = u64::from_le_bytes(dot_product_fp(&C[i], &sk.v).to_repr().0);
-    let v_i = u64::from_le_bytes(sk.v[i].to_repr().0);
-    Fp::from(x_i / v_i)
-}
+    fn decrypt(&self, sk: &GswSk, cipher_matrix: Vec<Vec<Fp>>) -> Fp {
+        let i = 63 - (P / 3).leading_zeros() as usize; //efficient log2(P/3)
+        let x_i = u64::from_le_bytes(dot_product_fp(&cipher_matrix[i], &sk.v).to_repr().0);
+        let v_i = u64::from_le_bytes(sk.v[i].to_repr().0);
+        Fp::from(x_i / v_i)
+    }
 
+    fn eval() {
+        
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -51,10 +73,11 @@ mod tests {
 
     use crate::field::Fp;
     use crate::field::P;
+    use crate::gsw::FheScheme;
+    use crate::gsw::NAIVE_GSW;
     use crate::misc::{matrix_vector_fp, rnd_fp_vec};
     use crate::gsw::pk::GswPk;
     use crate::gsw::sk::GswSk;
-    use crate::gsw::{gsw_dec, gsw_enc, gsw_keygen};
     #[test]
     fn sk_pk_invariant() {
         let n = 10;
@@ -72,17 +95,15 @@ mod tests {
 
     #[test]
     fn encryption_decryption() {
-        let n = 10;
-        let m = 5;
+        
+        let (sk, pk) = NAIVE_GSW.keygen();
 
-        let (sk, pk) = gsw_keygen(n, m);
-
-        let encr = gsw_enc(n, m, &pk, Fp::ZERO);
-        let decr = gsw_dec(&sk, encr);
+        let encr = NAIVE_GSW.encrypt(&pk, Fp::ZERO);
+        let decr = NAIVE_GSW.decrypt(&sk, encr);
         assert_eq!(decr, Fp::ZERO);
 
-        let encr = gsw_enc(n, m, &pk, Fp::ONE);
-        let decr = gsw_dec(&sk, encr);
+        let encr = NAIVE_GSW.encrypt(&pk, Fp::ONE);
+        let decr = NAIVE_GSW.decrypt(&sk, encr);
         assert_eq!(decr, Fp::ONE);
     }
 }
