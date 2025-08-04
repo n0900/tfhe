@@ -2,16 +2,48 @@ pub mod dimacs;
 
 use std::{collections::HashSet};
 
-use ff::Field;
-
-use crate::{field::{Fp, P}, zo_sss::dimacs::DIMACS};
-use crate::{misc::rnd_fp};
+use crate::{field::{Fp, P}, misc::rnd_fp, zo_sss::dimacs::DIMACS};
 
 #[derive(Clone)]
 pub struct Party {
     pub name: u8,
-    pub shares: Vec<Fp>
+    pub shares: Vec<Vec<Fp>>
 }
+
+/// Secret Sharing via Monotone Boolean Formula Access Structure
+/// Access Structure is fully defined via DIMACS.
+/// # Parameters
+/// - `secrets`: A set of secrets in Fp.
+/// - `dimacs`: The monotone boolean formula (MBF) defining the access structure.
+pub fn share(secrets: Vec<Fp>, dimacs: &DIMACS) -> Vec<Party> {
+    let num = dimacs.num_clauses as usize;
+    let w_matrix: Vec<Vec<Fp>> = build_w_matrix(secrets, num);
+    get_parties(w_matrix, dimacs)
+}
+
+fn get_parties(w_matrix: Vec<Vec<Fp>>, dimacs: &DIMACS) -> Vec<Party> {
+    dimacs.partitions
+        .iter()
+        .enumerate()
+        .map(|(i, p)| {
+            let shares = w_matrix
+                .iter()
+                .map(|w| p.iter().map(|&j| w[j as usize]).collect())
+                .collect();
+            Party { name: (i + 1) as u8, shares }
+        })
+        .collect()
+}
+
+fn build_w_matrix(secrets: Vec<Fp>, num: usize) -> Vec<Vec<Fp>> {
+    secrets
+        .into_iter()
+        .map(|secret| {
+            build_w(secret, num)
+        })
+        .collect()
+}
+
 
 /// This follows Appendix C.2 of Boneh et al. "Threshold Cryptosystems From
 /// Threshold Fully Homomorphic Encryption"
@@ -40,50 +72,63 @@ pub struct Party {
 /// ...
 /// This allows us to never having to calculate the full matrix
 /// or secret||random vector.
-pub fn share(secret: Fp, dimacs: &DIMACS) -> Vec<Party> {
-    let num = dimacs.num_clauses as usize;
-    let mut w: Vec<Fp> = vec![];
-    let mut var1 = secret;
-    let mut var2 = Fp::ONE;//rnd_fp(0, P-1);
-    let mut out: Vec<Party> = vec![];
+fn build_w(secret: Fp, num: usize) -> Vec<Fp> {
+    let mut v1 = secret;
+    let mut v2 = rnd_fp(0, P - 1);
+    let mut w = Vec::with_capacity(num);
 
-    for _ in 0..num-1 {
-        w.push(var1 + var2);
-        var1 = -var2;
-        var2 = Fp::ONE;//rnd_fp(0, P-1);
+    for _ in 0..num - 1 {
+        w.push(v1 + v2);
+        v1 = -v2;
+        v2 = rnd_fp(0, P - 1);
     }
-    w.push(var1);
-    
-    for (i,p) in dimacs.partitions.iter().enumerate() {
-        let shares = p.into_iter().map(|j | w[*j as usize]).collect();
-        out.push(Party { name: (i+1) as u8, shares });
-    }
-    out
+    w.push(v1);
+    w
 }
 
-/// Assume parties are identified by numbers 0..N-1
-/// We then find a min cardinality subset of parties
-/// to use {0,1} LSSS property
-pub fn combine(parties: Vec<Party>, dimacs: &DIMACS) -> Fp {
+/// Assumes parties are numbered 0 to N-1 and that they have the same number of sets of shares.
+/// Finds a minimum-cardinality subset of parties 
+/// satisfying the {0,1}-LSSS property.
+///
+/// # Parameters
+/// - `parties`: A set of parties, each with a name and a set of share sets.
+/// - `index`: Indicates which secret to reconstruct.
+/// - `is_minimal`: If `true`, skips computing the minimal subset.
+/// - `dimacs`: The monotone boolean formula (MBF) defining the access structure.
+pub fn combine(parties: Vec<Party>, is_minimal: bool, dimacs: &DIMACS) -> Vec<Fp> {
+    let min_set: Vec<Party> = if !is_minimal {
+        get_min_party(&parties, dimacs)
+    } else { parties };
+
+    let num_secrets = min_set.first().unwrap().shares.len();
+    (0..num_secrets)
+        .map(|i| get_party_shares(&min_set, i).iter().sum())
+        .collect()
+}
+
+pub fn get_min_party(parties: &Vec<Party>, dimacs: &DIMACS) -> Vec<Party> {
     let min_set_names: HashSet<u8> = find_min_sat(parties.iter().map(|p| p.name as u8).collect(), dimacs).unwrap();
+    get_parties_by_name(&parties, &min_set_names)
+}
 
-    let min_set: Vec<Party> = parties
-        .iter()
-        .filter(|p| min_set_names.contains(&(p.name as u8)))
-        .cloned()
+// Cannot use HashSet<Fp> bc Fp does not implement Hash
+// -> manual deduplication
+fn get_party_shares(parties: &Vec<Party>, index: usize) -> Vec<Fp> {
+    let mut all_shares: Vec<Fp> = parties.iter()
+        .flat_map(|p| p.shares[index].iter().cloned())
         .collect();
 
-    let mut all_shares: Vec<Fp> = min_set
-        .iter()
-        .flat_map(|p| p.shares.iter().cloned())
-        .collect();
-
-    // Cannot use HashSet<Fp> bc Fp does not implement Hash
-    // -> manual deduplication
     all_shares.sort();
     all_shares.dedup();
+    all_shares
+}
 
-    all_shares.iter().sum()
+fn get_parties_by_name(parties: &Vec<Party>, names: &HashSet<u8>) -> Vec<Party> {
+    parties
+        .iter()
+        .filter(|p| names.contains(&(p.name as u8)))
+        .cloned()
+        .collect()
 }
 
 fn find_min_sat(party: HashSet<u8>, dimacs: &DIMACS) -> Option<HashSet<u8>> {
@@ -118,18 +163,17 @@ fn check_sat(parties: &HashSet<u8>, dimacs: &DIMACS) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use ff::Field;
 
-    use crate::{field::{Fp, P}, misc::rnd_fp, zo_sss::{combine, dimacs::{DIMACS, DIMACS_2_OF_3_SCHEME, DIMACS_AB_OR_CD}, find_min_sat, share, Party}};
+    use crate::{field::{Fp, P}, misc::rnd_fp, zo_sss::{combine, dimacs::{DIMACS, DIMACS_2_OF_3_SCHEME, DIMACS_AB_OR_CD}, get_min_party, share}};
 
     #[test]
     fn share_test_two_of_three() {
         let secret = rnd_fp(0, P-1);
         let dimacs = DIMACS::parse(DIMACS_2_OF_3_SCHEME);
-        let parties = share(secret, &dimacs);
+        let parties = share(vec![secret], &dimacs);
         assert_eq!(parties.len(), 3);
         for p in parties {
-            assert_eq!(p.shares.len(), 2);
+            assert_eq!(p.shares[0].len(), 2);
         }
     }
 
@@ -137,34 +181,35 @@ mod tests {
     fn share_test_AB_or_CD() {
         let secret = rnd_fp(0, P-1);
         let dimacs = DIMACS::parse(DIMACS_AB_OR_CD);
-        let parties = share(secret, &dimacs);
+        let parties = share(vec![secret], &dimacs);
         assert_eq!(parties.len(), 4);
         for p in parties {
-            assert_eq!(p.shares.len(), 2);
+            assert_eq!(p.shares[0].len(), 2);
         }
     }
 
     #[test]
     fn secret_sharing_2_of_3_test(){
-        let secret = Fp::ZERO;//rnd_fp(0, P-1);
+        let secret = rnd_fp(0, P-1);
         let dimacs = DIMACS::parse(DIMACS_2_OF_3_SCHEME);
-        let parties = share(secret, &dimacs);
-        let hashset_of_party_names = parties.iter().map(|p| p.name).collect();
-        let subset = find_min_sat(hashset_of_party_names, &dimacs).unwrap();
-        assert_eq!(subset.len(), 2);
-        let result = combine(parties, &dimacs);
-        assert_eq!(result, secret);
+        execute_mbf_test(secret, &dimacs);
     }
 
     #[test]
     fn secret_sharing_AB_CD_test(){
         let secret = rnd_fp(0, P-1);
         let dimacs = DIMACS::parse(DIMACS_AB_OR_CD);
-        let parties = share(secret, &dimacs);
-        let hashset_of_party_names = parties.iter().map(|p| p.name).collect();
-        let subset = find_min_sat(hashset_of_party_names, &dimacs).unwrap();
+        execute_mbf_test(secret, &dimacs);
+    }
+
+    fn execute_mbf_test(secret: Fp, dimacs: &DIMACS) {
+        let parties = share(vec![secret], &dimacs);
+        let subset = get_min_party(&parties, &dimacs);
         assert_eq!(subset.len(), 2);
-        let result = combine(parties, &dimacs);
+        let result = *combine(subset, true, &dimacs).first().unwrap();
         assert_eq!(result, secret);
+
+        let result2 = *combine(parties, false, &dimacs).first().unwrap();
+        assert_eq!(result2, secret);
     }
 }
