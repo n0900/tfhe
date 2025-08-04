@@ -9,10 +9,10 @@ pub struct NaiveSampling;
 
 impl ErrorSampling for NaiveSampling {
     fn rnd_fp() -> Fp {
-        rnd_fp(0, 10);
+        rnd_fp(0, 10)
     }
 
     fn rnd_fp_vec(size: usize) -> Vec<Fp> {
-        rnd_fp_vec(size, 0, 10);
+        rnd_fp_vec(size, 0, 10)
     }
 }

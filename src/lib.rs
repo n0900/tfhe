@@ -1,4 +1,4 @@
-use crate::{field::Fp, gsw::{gsw_keygen, pk::GswPk}, zo_sss::{dimacs::{DIMACS, DIMACS_2_OF_3_SCHEME}, Party, SecretSharingScheme}};
+use crate::{error_sampling::{ErrorSampling}, field::Fp, gsw::{pk::GswPk, FheScheme, GSW}, zo_sss::{dimacs::{DIMACS}, Party, SecretSharingScheme}};
 
 pub mod field;
 pub mod misc;
@@ -6,15 +6,33 @@ pub mod gsw;
 pub mod zo_sss;
 pub mod error_sampling;
 
-pub struct TfheScheme<S: SecretSharingScheme, E: FheScheme> {
-    secret_sharing_scheme: S,
-    fhe_scheme: E
+pub struct TfheStructure<S: SecretSharingScheme, E: FheScheme> {
+    pub secret_sharing_scheme: S,
+    pub fhe_scheme: E
 }
 
-pub fn tfhe_setup(dimacs_formula: &str, n: u8, m: u8) {
-    let (sk, pk) = gsw_keygen(n, m);
-    let dimacs = DIMACS::parse(&dimacs_formula);
+pub trait TfheScheme {
+    type PublicKey;
+    fn setup(&self) -> (Vec<Party>, Self::PublicKey);
+    // fn encrypt();
+    // fn part_dec();
+    // fn fin_dec();
+    // fn eval();
+}
 
+/// Implements GSW with arbitrary SSS scheme and arbitrary error distribition
+impl<S, T> TfheScheme for TfheStructure<S, GSW<T>>
+where
+    S: SecretSharingScheme,
+    T: ErrorSampling,
+{
+    type PublicKey = GswPk;
+
+    fn setup(&self) -> (Vec<Party>, <GSW<T> as FheScheme>::PublicKey) {
+        let (sk, pk) = self.fhe_scheme.keygen();
+        let parties = self.secret_sharing_scheme.share(sk.s);
+        (parties, pk)
+    }
 }
 
 /// # Parameters:

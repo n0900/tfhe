@@ -12,14 +12,6 @@ use crate::{
     }
 };
 
-pub struct GSW<T: ErrorSampling> {
-    n: u8,
-    m: u8,
-    err_sampling: T,
-}
-
-pub static  NAIVE_GSW: GSW<NaiveSampling> = GSW { n: 10, m: 10, err_sampling: NaiveSampling{} };
-
 pub trait FheScheme {
     type SecretKey;
     type PublicKey;
@@ -27,8 +19,16 @@ pub trait FheScheme {
     fn keygen(&self) -> (Self::SecretKey, Self::PublicKey);
     fn encrypt(&self, pk: &GswPk, message: Fp) -> Vec<Vec<Fp>>;
     fn decrypt(&self, sk: &GswSk, cipher_matrix: Vec<Vec<Fp>>) -> Fp;
-    fn eval();
+    fn eval(); //TODO
 }
+
+pub struct GSW<T: ErrorSampling> {
+    n: u8,
+    m: u8,
+    err_sampling: T,
+}
+
+pub static NAIVE_GSW: GSW<NaiveSampling> = GSW { n: 10, m: 10, err_sampling: NaiveSampling{} };
 
 impl<T: ErrorSampling> FheScheme for GSW<T> {
     type SecretKey = GswSk;
@@ -36,7 +36,7 @@ impl<T: ErrorSampling> FheScheme for GSW<T> {
 
     fn keygen(&self) -> (Self::SecretKey, Self::PublicKey) {
         let sk = GswSk::new(rnd_fp_vec(self.n as usize, 0, P-1));
-        let err = self.err_sampling.rnd_fp_vec(self.m as usize);
+        let err = T::rnd_fp_vec(self.m as usize);
         let B: Vec<Vec<Fp>> = (0..err.len()).map(|_| rnd_fp_vec(self.n as usize, 0, P-1)).collect();
         let pk = GswPk::new(&B, &err, &sk.t);
         (sk, pk)   
