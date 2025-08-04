@@ -2,7 +2,6 @@ use std::collections::HashSet;
 
 use crate::{field::{Fp, P}, misc::rnd_fp, zo_sss::{dimacs::DIMACS, Party}};
 
-
 /// Secret Sharing via Monotone Boolean Formula Access Structure
 /// Access Structure is fully defined via DIMACS.
 /// # Parameters

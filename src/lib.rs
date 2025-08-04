@@ -1,4 +1,4 @@
-use crate::{error_sampling::{ErrorSampling}, field::Fp, gsw::{pk::GswPk, FheScheme, GSW}, zo_sss::{dimacs::{DIMACS}, Party, SecretSharingScheme}};
+use crate::{error_sampling::ErrorSampling, field::Fp, gsw::{pk::GswPk, sk::GswSk, FheScheme, GSW}, zo_sss::{dimacs::DIMACS, Party, SecretSharingScheme}};
 
 pub mod field;
 pub mod misc;
@@ -12,10 +12,13 @@ pub struct TfheStructure<S: SecretSharingScheme, E: FheScheme> {
 }
 
 pub trait TfheScheme {
+    type SecretKey;
     type PublicKey;
+    type Ciphertext;
+
     fn setup(&self) -> (Vec<Party>, Self::PublicKey);
-    // fn encrypt();
-    // fn part_dec();
+    fn encrypt(&self, pk: &Self::PublicKey, message: Fp) -> Self::Ciphertext;
+    fn part_dec(&self, pk: &Self::PublicKey, ciphertext: Self::Ciphertext, party: Party);
     // fn fin_dec();
     // fn eval();
 }
@@ -26,24 +29,26 @@ where
     S: SecretSharingScheme,
     T: ErrorSampling,
 {
-    type PublicKey = GswPk;
+    type SecretKey = <GSW<T> as FheScheme>::SecretKey;
+    type PublicKey = <GSW<T> as FheScheme>::PublicKey;
+    type Ciphertext = <GSW<T> as FheScheme>::CipherText;
 
-    fn setup(&self) -> (Vec<Party>, <GSW<T> as FheScheme>::PublicKey) {
+    fn setup(&self) -> (Vec<Party>, Self::PublicKey) {
         let (sk, pk) = self.fhe_scheme.keygen();
         let parties = self.secret_sharing_scheme.share(sk.s);
         (parties, pk)
     }
-}
 
-/// # Parameters:
-///  - `pk`: Public Key
-///  - `message`: Fp element. Must be either Fp::ZERO or Fp::ONE (After Boneh et al.)
-pub fn tfhe_encrypt(pk: GswPk, message: Fp) -> Vec<Vec<Fp>> {
-    todo!()
-}
+    /// # Parameters:
+    ///  - `pk`: Public Key
+    ///  - `message`: Fp element. Must be either Fp::ZERO or Fp::ONE (After Boneh et al.)
+    fn encrypt(&self, pk: &Self::PublicKey, message: Fp) -> Self::Ciphertext {
+        self.fhe_scheme.encrypt(pk, message)
+    }
 
-pub fn tfhe_part_decrypt(pk: GswPk, ciphertext: Vec<Vec<Fp>>, secret_key_share: Vec<Fp>) {
-    todo!()
+    fn part_dec(&self, pk: &Self::PublicKey, ciphertext: Self::Ciphertext, party: Party) {
+        todo!()
+    } 
 }
 
 pub fn tfhe_final_decrypt(pk: GswPk, parties: Vec<Party>) -> Fp {

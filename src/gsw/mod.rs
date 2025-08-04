@@ -15,10 +15,11 @@ use crate::{
 pub trait FheScheme {
     type SecretKey;
     type PublicKey;
+    type CipherText;
 
     fn keygen(&self) -> (Self::SecretKey, Self::PublicKey);
-    fn encrypt(&self, pk: &GswPk, message: Fp) -> Vec<Vec<Fp>>;
-    fn decrypt(&self, sk: &GswSk, cipher_matrix: Vec<Vec<Fp>>) -> Fp;
+    fn encrypt(&self, pk: &GswPk, message: Fp) -> Self::CipherText;
+    fn decrypt(&self, sk: &GswSk, cipher_matrix: Self::CipherText) -> Fp;
     fn eval(); //TODO
 }
 
@@ -33,6 +34,7 @@ pub static NAIVE_GSW: GSW<NaiveSampling> = GSW { n: 10, m: 10, err_sampling: Nai
 impl<T: ErrorSampling> FheScheme for GSW<T> {
     type SecretKey = GswSk;
     type PublicKey = GswPk;
+    type CipherText = Vec<Vec<Fp>>;
 
     fn keygen(&self) -> (Self::SecretKey, Self::PublicKey) {
         let sk = GswSk::new(rnd_fp_vec(self.n as usize, 0, P-1));
