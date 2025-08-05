@@ -37,9 +37,13 @@ impl<T: ErrorSampling> FheScheme for GSW<T> {
     type CipherText = Vec<Vec<Fp>>;
 
     fn keygen(&self) -> (Self::SecretKey, Self::PublicKey) {
-        let sk = GswSk::new(rnd_fp_vec(self.n as usize, 0, P-1));
-        let err = T::rnd_fp_vec(self.m as usize);
-        let B: Vec<Vec<Fp>> = (0..err.len()).map(|_| rnd_fp_vec(self.n as usize, 0, P-1)).collect();
+        let sk = GswSk::new(rnd_fp_vec(self.n as usize, 0, P-1));  
+          
+        let err = self.err_sampling.rnd_fp_vec(self.m as usize);    
+        let B: Vec<Vec<Fp>> = (0..err.len())
+            .map(|_| rnd_fp_vec(self.n as usize, 0, P-1))
+            .collect();
+        
         let pk = GswPk::new(&B, &err, &sk.t);
         (sk, pk)   
     }

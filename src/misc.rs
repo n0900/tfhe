@@ -3,7 +3,6 @@ use ff::{Field, PrimeFieldBits};
 use rand::Rng;
 
 pub fn rnd_fp_vec(size: usize, min: u64, max: u64) -> Vec<Fp> {
-    let mut rng = rand::rng();
     (0..size).map(|_| rnd_fp(min, max)).collect()
 }
 

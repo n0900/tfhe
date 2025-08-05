@@ -1,4 +1,4 @@
-use crate::{error_sampling::ErrorSampling, field::Fp, gsw::{pk::GswPk, sk::GswSk, FheScheme, GSW}, zo_sss::{dimacs::DIMACS, Party, SecretSharingScheme}};
+use crate::{error_sampling::ErrorSampling, field::Fp, gsw::{pk::GswPk, FheScheme, GSW}, zo_sss::{Party, SecretSharingScheme}};
 
 pub mod field;
 pub mod misc;
