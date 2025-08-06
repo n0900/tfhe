@@ -52,7 +52,7 @@ impl SecretSharingScheme for MBF {
 
 #[cfg(test)]
 mod tests {
-    use crate::{field::P, misc::rnd_fp_vec, zo_sss::{dimacs::{DIMACS, DIMACS_2_OF_3_SCHEME, DIMACS_AB_OR_CD}, SecretSharingScheme, Shamir, MBF}};
+    use crate::{error_sampling::rnd_fp_vec, field::P, zo_sss::{dimacs::{DIMACS, DIMACS_2_OF_3_SCHEME, DIMACS_AB_OR_CD}, SecretSharingScheme, Shamir, MBF}};
 
     #[test]
     fn shamir_struct_test() {

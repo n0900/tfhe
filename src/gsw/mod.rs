@@ -1,26 +1,29 @@
 pub mod sk;
 pub mod pk;
+pub mod gsw;
 
 use std::ops::Mul;
 
-use ff::PrimeField;
+use ff::{Field, PrimeField};
 
 use crate::{
-    error_sampling::{ErrorSampling, NaiveSampling}, field::{Fp, L, P}, gsw::{pk::GswPk, sk::GswSk}, misc::{
-        add_to_diagonal, bit_decomp_matrix, dot_product_fp, flatten_matrix, matrix_matrix_fp,
-        rnd_fp_vec,
-    }
+    error_sampling::{rnd_fp_vec, ErrorSampling, NaiveSampler}, field::{Fp, L, P}, gsw::{gsw::{
+        add_matrix_matrix_fp, add_to_diagonal, bit_decomp_matrix, dot_product_fp, flatten_matrix, mult_const_matrix_fp, mult_matrix_matrix_fp, negate_matrix_fp
+    }, pk::GswPk, sk::GswSk}
 };
 
 pub trait FheScheme {
     type SecretKey;
     type PublicKey;
-    type CipherText;
+    type Ciphertext;
 
     fn keygen(&self) -> (Self::SecretKey, Self::PublicKey);
-    fn encrypt(&self, pk: &GswPk, message: Fp) -> Self::CipherText;
-    fn decrypt(&self, sk: &GswSk, cipher_matrix: Self::CipherText) -> Fp;
-    fn eval(); //TODO
+    fn encrypt(&self, pk: &GswPk, message: Fp) -> Self::Ciphertext;
+    fn decrypt(&self, sk: &GswSk, ciphertext: &Self::Ciphertext) -> Fp;
+    fn add(&self, ciphertext1: &Self::Ciphertext, ciphertext2: &Self::Ciphertext) -> Self::Ciphertext;
+    fn mult_const(&self, ciphertext: &Self::Ciphertext, constant: Fp) -> Self::Ciphertext;
+    fn mult(&self, ciphertext1: &Self::Ciphertext, ciphertext2: &Self::Ciphertext) -> Self::Ciphertext;
+    fn nand(&self, ciphertext1: &Self::Ciphertext, ciphertext2: &Self::Ciphertext) -> Self::Ciphertext;
 }
 
 pub struct GSW<T: ErrorSampling> {
@@ -29,12 +32,12 @@ pub struct GSW<T: ErrorSampling> {
     err_sampling: T,
 }
 
-pub static NAIVE_GSW: GSW<NaiveSampling> = GSW { n: 10, m: 10, err_sampling: NaiveSampling{} };
+pub static NAIVE_GSW: GSW<NaiveSampler> = GSW { n: 10, m: 10, err_sampling: NaiveSampler{} };
 
 impl<T: ErrorSampling> FheScheme for GSW<T> {
     type SecretKey = GswSk;
     type PublicKey = GswPk;
-    type CipherText = Vec<Vec<Fp>>;
+    type Ciphertext = Vec<Vec<Fp>>;
 
     fn keygen(&self) -> (Self::SecretKey, Self::PublicKey) {
         let sk = GswSk::new(rnd_fp_vec(self.n as usize, 0, P-1));  
@@ -48,28 +51,52 @@ impl<T: ErrorSampling> FheScheme for GSW<T> {
         (sk, pk)   
     }
 
-    fn encrypt(&self, pk: &GswPk, message: Fp) -> Vec<Vec<Fp>> {
+    fn encrypt(&self, pk: &Self::PublicKey, message: Fp) -> Self::Ciphertext {
         let N: usize = L.mul((self.n + 1) as usize);
         let R = (0..N).map(|_| rnd_fp_vec(self.m as usize, 0, 1)).collect();
         flatten_matrix(
             &add_to_diagonal(
                 &bit_decomp_matrix(
-                    &matrix_matrix_fp(&R, &pk.A)
+                    &mult_matrix_matrix_fp(&R, &pk.A)
                 ),
                 message
             )
         )
     }
 
-    fn decrypt(&self, sk: &GswSk, cipher_matrix: Vec<Vec<Fp>>) -> Fp {
+    fn decrypt(&self, sk: &Self::SecretKey, ciphertext: &Self::Ciphertext) -> Fp {
         let i = 63 - (P / 3).leading_zeros() as usize; //efficient log2(P/3)
-        let x_i = u64::from_le_bytes(dot_product_fp(&cipher_matrix[i], &sk.v).to_repr().0);
+        let x_i = u64::from_le_bytes(dot_product_fp(&ciphertext[i], &sk.v).to_repr().0);
         let v_i = u64::from_le_bytes(sk.v[i].to_repr().0);
         Fp::from(x_i / v_i)
     }
 
-    fn eval() {
-        
+    // flatten(C1+C2)
+    fn add(&self, ciphertext1: &Self::Ciphertext, cipertext2: &Self::Ciphertext) -> Self::Ciphertext {
+        assert_eq!(ciphertext1.len(), cipertext2.len(), "Cannot add Ciphertexts because they are different sizes");
+        assert_eq!(ciphertext1.first().unwrap().len(), cipertext2.first().unwrap().len(), "Cannot add Ciphertexts because they are different sizes");
+        flatten_matrix(&add_matrix_matrix_fp(ciphertext1, cipertext2))
+    }
+
+    // flatten(C*a)
+    fn mult_const(&self, ciphertext: &Self::Ciphertext, constant: Fp) -> Self::Ciphertext {
+        flatten_matrix(&mult_const_matrix_fp(&ciphertext, constant))
+    }
+
+    // flatten(C1*C2)
+    fn mult(&self, ciphertext1: &Self::Ciphertext, cipertext2: &Self::Ciphertext) -> Self::Ciphertext {
+        assert_eq!(ciphertext1.len(), cipertext2.len(), "Cannot mult Ciphertexts because they are different sizes");
+        assert_eq!(ciphertext1.first().unwrap().len(), cipertext2.first().unwrap().len(), "Cannot mult Ciphertexts because they are different sizes");
+        flatten_matrix(&mult_matrix_matrix_fp(ciphertext1, cipertext2))
+    }
+
+    // flatten(I - C1*C2)
+    fn nand(&self, ciphertext1: &Self::Ciphertext, cipertext2: &Self::Ciphertext) -> Self::Ciphertext {
+        flatten_matrix(
+            &add_to_diagonal(
+                &negate_matrix_fp(&mult_matrix_matrix_fp(ciphertext1, cipertext2)), 
+                Fp::ONE)
+            )
     }
 }
 
@@ -77,13 +104,15 @@ impl<T: ErrorSampling> FheScheme for GSW<T> {
 mod tests {
     use ff::{Field};
 
+    use crate::error_sampling::rnd_fp_vec;
     use crate::field::Fp;
     use crate::field::P;
     use crate::gsw::FheScheme;
     use crate::gsw::NAIVE_GSW;
-    use crate::misc::{matrix_vector_fp, rnd_fp_vec};
+    use crate::gsw::gsw::{mult_matrix_vector_fp};
     use crate::gsw::pk::GswPk;
     use crate::gsw::sk::GswSk;
+
     #[test]
     fn sk_pk_invariant() {
         let n = 10;
@@ -93,7 +122,7 @@ mod tests {
         let err = rnd_fp_vec(m, 0, 10);
         let B: Vec<Vec<Fp>> = (0..err.len()).map(|_| rnd_fp_vec(n, 0, P-1)).collect();
         let pk = GswPk::new(&B, &err, &sk.t);
-        let invariant = matrix_vector_fp(&pk.A, &sk.s);
+        let invariant = mult_matrix_vector_fp(&pk.A, &sk.s);
 
         // As = e
         assert_eq!(invariant, err);
@@ -105,11 +134,11 @@ mod tests {
         let (sk, pk) = NAIVE_GSW.keygen();
 
         let encr = NAIVE_GSW.encrypt(&pk, Fp::ZERO);
-        let decr = NAIVE_GSW.decrypt(&sk, encr);
+        let decr = NAIVE_GSW.decrypt(&sk, &encr);
         assert_eq!(decr, Fp::ZERO);
 
         let encr = NAIVE_GSW.encrypt(&pk, Fp::ONE);
-        let decr = NAIVE_GSW.decrypt(&sk, encr);
+        let decr = NAIVE_GSW.decrypt(&sk, &encr);
         assert_eq!(decr, Fp::ONE);
     }
 }

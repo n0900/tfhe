@@ -1,29 +1,47 @@
-use crate::{field::Fp, misc::{rnd_fp, rnd_fp_vec}};
+use crate::{field::{Fp, P}};
 
 use ff::Field;
-use num_bigint::{BigInt, BigUint, Sign};
+use num_bigint::{BigUint, Sign};
 use num_rational::Ratio;
 use prio::dp::distributions::DiscreteGaussian;
-use rand::{distr::Distribution, rng, rngs::ThreadRng, Rng};
+use rand::{distr::Distribution, rng, Rng};
+
+
+pub fn rnd_fp_vec(size: usize, min: u64, max: u64) -> Vec<Fp> {
+    (0..size).map(|_| rnd_fp(min, max)).collect()
+}
+
+pub fn rnd_fp(min: u64, max: u64) -> Fp {
+    assert!(max <= P);
+    let mut rng = rand::rng();
+    Fp::from(rng.random_range(min..max))
+}
 
 pub trait ErrorSampling {
     fn rnd_fp(&self) -> Fp;
     fn rnd_fp_vec(&self, size: usize) -> Vec<Fp>;
 }
 
-pub struct DiscrGaussian {
+pub struct DiscrGaussianSampler {
     sampler: DiscreteGaussian,
 }
 
-impl DiscrGaussian {
+impl DiscrGaussianSampler {
     pub fn new(stddev: Ratio<BigUint>) -> Self {
         let sampler = DiscreteGaussian::new(stddev).expect("Failed to create DiscreteGaussian");
         Self {
             sampler,
         }
     }
+
+    pub fn default() -> Self {
+        Self {
+            sampler: DiscreteGaussian::new(Ratio::<BigUint>::new(BigUint::from(3u32), BigUint::from(1u32))).unwrap()
+        }
+    }
 }
-impl ErrorSampling for DiscrGaussian {
+
+impl ErrorSampling for DiscrGaussianSampler {
     fn rnd_fp(&self) -> Fp {
         let mut rng = rng();
         let (sign, digits) = self.sampler.sample(&mut rng).to_u64_digits();
@@ -41,9 +59,9 @@ impl ErrorSampling for DiscrGaussian {
     }
 }
 
-pub struct NaiveSampling;
+pub struct NaiveSampler;
 
-impl ErrorSampling for NaiveSampling {
+impl ErrorSampling for NaiveSampler {
     fn rnd_fp(&self) -> Fp {
         let mut rng = rng();
         Fp::from(rng.random_range(0..10))
@@ -56,15 +74,13 @@ impl ErrorSampling for NaiveSampling {
 
 #[cfg(test)]
 mod test {
-    use num_bigint::BigUint;
-    use num_rational::Ratio;
 
-    use crate::{error_sampling::{DiscrGaussian, ErrorSampling}, misc::rnd_fp_vec};
+    use crate::{error_sampling::{DiscrGaussianSampler, ErrorSampling}};
 
     #[test]
     fn gaussian_test() {
         // check that random numbers are not all equal
-        let mut gaussian = DiscrGaussian::new(Ratio::<BigUint>::new(BigUint::from(3u32), BigUint::from(1u32)));
+        let gaussian = DiscrGaussianSampler::default();
         let rnd_vec = gaussian.rnd_fp_vec(100);
         println!("First 5 samples: {:?}", &rnd_vec[..10.min(rnd_vec.len())]);
 

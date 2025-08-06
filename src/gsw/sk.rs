@@ -1,7 +1,7 @@
 use ff::Field;
 
 use crate::field::Fp;
-use crate::misc::powers_of_2;
+use crate::gsw::gsw::powers_of_2;
 
 
 /// Contains all components of a private key. 

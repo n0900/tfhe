@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::{field::{Fp, P}, misc::rnd_fp, zo_sss::{dimacs::DIMACS, Party}};
+use crate::{error_sampling::rnd_fp, field::{Fp, P}, zo_sss::{dimacs::DIMACS, Party}};
 
 /// Secret Sharing via Monotone Boolean Formula Access Structure
 /// Access Structure is fully defined via DIMACS.
@@ -156,7 +156,7 @@ fn check_sat(parties: &HashSet<u8>, dimacs: &DIMACS) -> bool {
 #[cfg(test)]
 mod tests {
 
-    use crate::{field::{Fp, P}, misc::rnd_fp, zo_sss::{mbf::{mbf_combine, mbf_share, get_min_party}, dimacs::{DIMACS, DIMACS_2_OF_3_SCHEME, DIMACS_AB_OR_CD}}};
+    use crate::{error_sampling::rnd_fp, field::{Fp, P}, zo_sss::{dimacs::{DIMACS, DIMACS_2_OF_3_SCHEME, DIMACS_AB_OR_CD}, mbf::{get_min_party, mbf_combine, mbf_share}}};
 
     #[test]
     fn share_test_two_of_three() {

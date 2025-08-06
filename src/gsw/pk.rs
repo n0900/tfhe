@@ -1,4 +1,4 @@
-use crate::{field::Fp, misc::matrix_vector_fp, misc::vec_vec_fp_add};
+use crate::{field::Fp, gsw::gsw::mult_matrix_vector_fp, gsw::gsw::add_vec_vec_fp};
 
 
 /// Contains all components used in generating the public key.
@@ -16,7 +16,7 @@ pub struct GswPk {
 /// t == SK.t
 impl GswPk {
         pub fn new(B: &Vec<Vec<Fp>>, e: &Vec<Fp>, t: &Vec<Fp>) -> Self {
-        let b = vec_vec_fp_add(&matrix_vector_fp(&B, &t), &e);
+        let b = add_vec_vec_fp(&mult_matrix_vector_fp(&B, &t), &e);
 
         let A = B.iter()
             .enumerate()
