@@ -18,8 +18,8 @@ pub trait FheScheme {
     type Ciphertext;
 
     fn keygen(&self) -> (Self::SecretKey, Self::PublicKey);
-    fn encrypt(&self, pk: &GswPk, message: Fp) -> Self::Ciphertext;
-    fn decrypt(&self, sk: &GswSk, ciphertext: &Self::Ciphertext) -> Fp;
+    fn encrypt(&self, pk: &Self::PublicKey, message: Fp) -> Self::Ciphertext;
+    fn decrypt(&self, sk: &Self::SecretKey, ciphertext: &Self::Ciphertext) -> Fp;
     fn add(&self, ciphertext1: &Self::Ciphertext, ciphertext2: &Self::Ciphertext) -> Self::Ciphertext;
     fn mult_const(&self, ciphertext: &Self::Ciphertext, constant: Fp) -> Self::Ciphertext;
     fn mult(&self, ciphertext1: &Self::Ciphertext, ciphertext2: &Self::Ciphertext) -> Self::Ciphertext;
@@ -31,8 +31,6 @@ pub struct GSW<T: ErrorSampling> {
     m: u8,
     err_sampling: T,
 }
-
-pub static NAIVE_GSW: GSW<NaiveSampler> = GSW { n: 10, m: 10, err_sampling: NaiveSampler{} };
 
 impl<T: ErrorSampling> FheScheme for GSW<T> {
     type SecretKey = GswSk;
@@ -105,13 +103,16 @@ mod tests {
     use ff::{Field};
 
     use crate::error_sampling::rnd_fp_vec;
+    use crate::error_sampling::DiscrGaussianSampler;
+    use crate::error_sampling::ErrorSampling;
+    use crate::error_sampling::NaiveSampler;
     use crate::field::Fp;
     use crate::field::P;
     use crate::gsw::FheScheme;
-    use crate::gsw::NAIVE_GSW;
     use crate::gsw::gsw::{mult_matrix_vector_fp};
     use crate::gsw::pk::GswPk;
     use crate::gsw::sk::GswSk;
+    use crate::gsw::GSW;
 
     #[test]
     fn sk_pk_invariant() {
@@ -129,16 +130,27 @@ mod tests {
     }
 
     #[test]
-    fn encryption_decryption() {
-        
-        let (sk, pk) = NAIVE_GSW.keygen();
+    fn encryption_decryption_naive() {
+        let naive_gsw = GSW {n:10, m: 5, err_sampling: NaiveSampler };
+        test_inputs(naive_gsw);
+    }
 
-        let encr = NAIVE_GSW.encrypt(&pk, Fp::ZERO);
-        let decr = NAIVE_GSW.decrypt(&sk, &encr);
+
+    #[test]
+    fn encryption_decryption_discr_gaussian() {
+        let gaussian_gsw = GSW {n:10, m: 5, err_sampling: DiscrGaussianSampler::default() };
+        test_inputs(gaussian_gsw);
+    }
+
+    fn test_inputs<T: FheScheme>(fhe: T) {
+        let (sk, pk) = fhe.keygen();
+
+        let encr = fhe.encrypt(&pk, Fp::ZERO);
+        let decr = fhe.decrypt(&sk, &encr);
         assert_eq!(decr, Fp::ZERO);
 
-        let encr = NAIVE_GSW.encrypt(&pk, Fp::ONE);
-        let decr = NAIVE_GSW.decrypt(&sk, &encr);
+        let encr = fhe.encrypt(&pk, Fp::ONE);
+        let decr = fhe.decrypt(&sk, &encr);
         assert_eq!(decr, Fp::ONE);
     }
 }
