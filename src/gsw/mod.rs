@@ -43,21 +43,21 @@ impl<T: ErrorSampling> FheScheme for GSW<T> {
         let sk = GswSk::new(rnd_fp_vec(self.n as usize, 0, P-1));  
           
         let err = self.err_sampling.rnd_fp_vec(self.m as usize);    
-        let B: Vec<Vec<Fp>> = (0..err.len())
+        let random_matrix: Vec<Vec<Fp>> = (0..err.len())
             .map(|_| rnd_fp_vec(self.n as usize, 0, P-1))
             .collect();
         
-        let pk = GswPk::new(&B, &err, &sk.t);
+        let pk = GswPk::new(&random_matrix, &err, &sk.t);
         (sk, pk)   
     }
 
     fn encrypt(&self, pk: &Self::PublicKey, message: Fp) -> Self::Ciphertext {
-        let N: usize = L.mul((self.n + 1) as usize);
-        let R = (0..N).map(|_| rnd_fp_vec(self.m as usize, 0, 1)).collect();
+        let big_n: usize = L.mul((self.n + 1) as usize);
+        let random_matrix = (0..big_n).map(|_| rnd_fp_vec(self.m as usize, 0, 1)).collect();
         flatten_matrix(
             &add_to_diagonal(
                 &bit_decomp_matrix(
-                    &mult_matrix_matrix_fp(&R, &pk.A)
+                    &mult_matrix_matrix_fp(&random_matrix, &pk.pk_matrix)
                 ),
                 message
             )
@@ -120,9 +120,9 @@ mod tests {
 
         let sk = GswSk::new(rnd_fp_vec(n, 0, P-1));
         let err = rnd_fp_vec(m, 0, 10);
-        let B: Vec<Vec<Fp>> = (0..err.len()).map(|_| rnd_fp_vec(n, 0, P-1)).collect();
-        let pk = GswPk::new(&B, &err, &sk.t);
-        let invariant = mult_matrix_vector_fp(&pk.A, &sk.s);
+        let random_matrix: Vec<Vec<Fp>> = (0..err.len()).map(|_| rnd_fp_vec(n, 0, P-1)).collect();
+        let pk = GswPk::new(&random_matrix, &err, &sk.t);
+        let invariant = mult_matrix_vector_fp(&pk.pk_matrix, &sk.s);
 
         // As = e
         assert_eq!(invariant, err);

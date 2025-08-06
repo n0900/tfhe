@@ -170,7 +170,7 @@ mod tests {
     }
 
     #[test]
-    fn share_test_AB_or_CD() {
+    fn share_test_ab_or_cd() {
         let secret = rnd_fp(0, P-1);
         let dimacs = DIMACS::parse(DIMACS_AB_OR_CD);
         let parties = mbf_share(vec![secret], &dimacs);
@@ -188,7 +188,7 @@ mod tests {
     }
 
     #[test]
-    fn secret_sharing_AB_CD_test(){
+    fn secret_sharing_ab_cd_test(){
         let secret = rnd_fp(0, P-1);
         let dimacs = DIMACS::parse(DIMACS_AB_OR_CD);
         execute_mbf_test(secret, &dimacs);
