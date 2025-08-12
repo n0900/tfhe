@@ -4,11 +4,11 @@ pub mod gsw;
 
 use std::ops::Mul;
 
-use ff::{Field, PrimeField};
+use ff::{Field, PrimeField, PrimeFieldBits};
 
 use crate::{
-    error_sampling::{rnd_fp_vec, ErrorSampling, NOISE_CONST_INV}, field::{Fp, L, P}, gsw::{gsw::{
-        add_matrix_matrix_fp, add_to_diagonal, bit_decomp_matrix, dot_product_fp, flatten_matrix, mult_const_matrix_fp, mult_matrix_matrix_fp, negate_matrix_fp
+    error_sampling::{rnd_fp_vec, ErrorSampling}, field::{Fp, L, P}, gsw::{gsw::{
+        add_matrix_matrix_fp, add_to_diagonal, bit_decomp_matrix, dot_product_fp, flatten_matrix, mult_const_matrix_fp, mult_matrix_matrix_fp, mult_matrix_vector_fp, negate_matrix_fp
     }, pk::GswPk, sk::GswSk}
 };
 
@@ -71,7 +71,20 @@ impl<T: ErrorSampling> FheScheme for GSW<T> {
     }
 
     fn mp_decrypt(&self, sk: &Self::SecretKey, ciphertext: &Self::Ciphertext) -> Fp {
-        Fp::ZERO
+        let test = mult_matrix_vector_fp(&ciphertext, &sk.v);
+        let mut out: u64 = 0;
+        let mut i = 0;
+
+        // collect LSBs
+        for entry in test.iter().rev() {
+            out ^= entry.to_le_bits()[i] as u64;
+            i+=1;
+            if i>= L {
+                break;
+            }
+        }
+
+        Fp::from(out)
     }
 
     // flatten(C1+C2)
@@ -106,11 +119,13 @@ impl<T: ErrorSampling> FheScheme for GSW<T> {
 #[cfg(test)]
 mod tests {
     use ff::{Field};
+    use rand::Rng;
 
     use crate::error_sampling::rnd_fp_vec;
     use crate::error_sampling::DiscrGaussianSampler;
     use crate::error_sampling::NaiveSampler;
     use crate::field::Fp;
+    use crate::field::L;
     use crate::field::P;
     use crate::gsw::FheScheme;
     use crate::gsw::gsw::{mult_matrix_vector_fp};
@@ -144,6 +159,29 @@ mod tests {
     fn encryption_decryption_discr_gaussian() {
         let gaussian_gsw = GSW {n:10, m: 5, err_sampling: DiscrGaussianSampler::default() };
         test_inputs(gaussian_gsw);
+    }
+
+
+    #[test]
+    fn encryption_decryption_pow_of_two() {
+        let fhe = GSW {n:10, m: 5, err_sampling: DiscrGaussianSampler::default() };
+        let (sk, pk) = fhe.keygen();
+
+        let encr = fhe.encrypt(&pk, Fp::ZERO);
+        let decr = fhe.mp_decrypt(&sk, &encr);
+        assert_eq!(decr, Fp::ZERO);
+
+        let encr = fhe.encrypt(&pk, Fp::ONE);
+        let decr = fhe.mp_decrypt(&sk, &encr);
+        assert_eq!(decr, Fp::ONE);
+
+        let mut rng = rand::rng();
+        for _ in 0..10 {
+            let msg = Fp::from(1u64<<rng.random_range(0..L-1));
+            let encr = fhe.encrypt(&pk, msg);
+            let decr = fhe.mp_decrypt(&sk, &encr);
+            assert_eq!(decr, msg);
+        }
     }
 
     fn test_inputs<T: FheScheme>(fhe: T) {
