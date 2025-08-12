@@ -7,7 +7,7 @@ use std::ops::Mul;
 use ff::{Field, PrimeField};
 
 use crate::{
-    error_sampling::{rnd_fp_vec, ErrorSampling, NaiveSampler}, field::{Fp, L, P}, gsw::{gsw::{
+    error_sampling::{rnd_fp_vec, ErrorSampling, NOISE_CONST_INV}, field::{Fp, L, P}, gsw::{gsw::{
         add_matrix_matrix_fp, add_to_diagonal, bit_decomp_matrix, dot_product_fp, flatten_matrix, mult_const_matrix_fp, mult_matrix_matrix_fp, negate_matrix_fp
     }, pk::GswPk, sk::GswSk}
 };
@@ -20,6 +20,7 @@ pub trait FheScheme {
     fn keygen(&self) -> (Self::SecretKey, Self::PublicKey);
     fn encrypt(&self, pk: &Self::PublicKey, message: Fp) -> Self::Ciphertext;
     fn decrypt(&self, sk: &Self::SecretKey, ciphertext: &Self::Ciphertext) -> Fp;
+    fn mp_decrypt(&self, sk: &Self::SecretKey, ciphertext: &Self::Ciphertext) -> Fp;
     fn add(&self, ciphertext1: &Self::Ciphertext, ciphertext2: &Self::Ciphertext) -> Self::Ciphertext;
     fn mult_const(&self, ciphertext: &Self::Ciphertext, constant: Fp) -> Self::Ciphertext;
     fn mult(&self, ciphertext1: &Self::Ciphertext, ciphertext2: &Self::Ciphertext) -> Self::Ciphertext;
@@ -63,10 +64,14 @@ impl<T: ErrorSampling> FheScheme for GSW<T> {
     }
 
     fn decrypt(&self, sk: &Self::SecretKey, ciphertext: &Self::Ciphertext) -> Fp {
-        let i = 63 - (P / 3).leading_zeros() as usize; //efficient log2(P/3)
-        let x_i = u64::from_le_bytes(dot_product_fp(&ciphertext[i], &sk.v).to_repr().0);
-        let v_i = u64::from_le_bytes(sk.v[i].to_repr().0);
-        Fp::from(x_i / v_i)
+        let i = 64 - (P / 3).leading_zeros() as usize; //efficient log2(P/3) (only for u64!)
+        let x_i = dot_product_fp(&ciphertext[i], &sk.v);
+        let v_i = sk.v[i].invert().unwrap();
+        x_i * v_i
+    }
+
+    fn mp_decrypt(&self, sk: &Self::SecretKey, ciphertext: &Self::Ciphertext) -> Fp {
+        Fp::ZERO
     }
 
     // flatten(C1+C2)
@@ -104,7 +109,6 @@ mod tests {
 
     use crate::error_sampling::rnd_fp_vec;
     use crate::error_sampling::DiscrGaussianSampler;
-    use crate::error_sampling::ErrorSampling;
     use crate::error_sampling::NaiveSampler;
     use crate::field::Fp;
     use crate::field::P;
@@ -120,7 +124,7 @@ mod tests {
         let m = 5;
 
         let sk = GswSk::new(rnd_fp_vec(n, 0, P-1));
-        let err = rnd_fp_vec(m, 0, 10);
+        let err = rnd_fp_vec(m, 0, P/2);
         let random_matrix: Vec<Vec<Fp>> = (0..err.len()).map(|_| rnd_fp_vec(n, 0, P-1)).collect();
         let pk = GswPk::new(&random_matrix, &err, &sk.t);
         let invariant = mult_matrix_vector_fp(&pk.pk_matrix, &sk.s);

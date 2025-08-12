@@ -3,9 +3,12 @@ use crate::{field::{Fp, P}};
 use ff::Field;
 use num_bigint::{BigUint, Sign};
 use num_rational::Ratio;
+use once_cell::sync::Lazy;
 use prio::dp::distributions::DiscreteGaussian;
 use rand::{distr::Distribution, rng, Rng};
 
+pub const NOISE_CONST: Lazy<Fp> = Lazy::new(||Fp::from(5));
+pub const NOISE_CONST_INV: Lazy<Fp> = Lazy::new(||Fp::from(5).invert().unwrap());
 
 pub fn rnd_fp_vec(size: usize, min: u64, max: u64) -> Vec<Fp> {
     (0..size).map(|_| rnd_fp(min, max)).collect()
@@ -49,9 +52,9 @@ impl ErrorSampling for DiscrGaussianSampler {
         assert!(digits.len()<=1);
         
         match sign {
-            Sign::Minus => -Fp::from(*digits.first().unwrap()),
+            Sign::Minus => -Fp::from(*digits.first().unwrap()) * *NOISE_CONST,
             Sign::NoSign => Fp::ZERO,
-            Sign::Plus => Fp::from(*digits.first().unwrap()),
+            Sign::Plus => Fp::from(*digits.first().unwrap()) * *NOISE_CONST,
         }
     } 
 
@@ -65,11 +68,11 @@ pub struct NaiveSampler;
 impl ErrorSampling for NaiveSampler {
     fn rnd_fp(&self) -> Fp {
         let mut rng = rng();
-        Fp::from(rng.random_range(0..10))
+        Fp::from(rng.random_range(0..P/2)) * *NOISE_CONST
     }
 
     fn rnd_fp_vec(&self, size: usize) -> Vec<Fp> {
-        rnd_fp_vec(size, 0, 10)
+        (0..size).map(|_| Self::rnd_fp(self)).collect()
     }
 }
 
