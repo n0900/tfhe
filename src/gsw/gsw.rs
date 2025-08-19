@@ -4,21 +4,18 @@ use ff::{Field, PrimeFieldBits};
 /// BitDecomp: Expand every Fp entry into bit representation and
 /// output a.len()*L =: N-dim array of Fp::ZERO and Fp::ONE entries.
 /// in little endian.
-pub fn bit_decomp(a: &Vec<Fp>) -> Vec<Fp> {
-    let mut bv = Vec::with_capacity(a.len() * L);
-    for elm in a.iter() {
-        for b in elm.to_le_bits().iter().take(L) {
-            bv.push(if *b { Fp::ONE } else { Fp::ZERO });
-        }
+pub fn bit_decomp(a: &mut Vec<Fp>) {
+    let mut tmp = Vec::with_capacity(a.len() * L);
+    for elm in a.drain(..) {
+        tmp.extend(elm.to_le_bits().iter().take(L).map(|b| if *b { Fp::ONE } else { Fp::ZERO }));
     }
-    bv
+    *a = tmp;
 }
 
 /// "When A is a matrix, let BitDecomp(A), BitDecomp−1 , or Flatten(A) be 
 /// the matrix formed by applying the operation to each row of A separately"
-pub fn bit_decomp_matrix(a_matrix: &Vec<Vec<Fp>>) -> Vec<Vec<Fp>> {
-    a_matrix.iter().map(|a| 
-    bit_decomp(a)).collect()
+pub fn bit_decomp_matrix(a_matrix: &mut Vec<Vec<Fp>>) {
+    a_matrix.iter_mut().for_each(|row| bit_decomp(row));
 }
 
 /// Inverse operation; only supports [u64;1] for now but could be expanded.
@@ -46,15 +43,14 @@ pub fn bit_decomp_inv_matrix(a_matrix: &Vec<Vec<Fp>>) -> Vec<Vec<Fp>> {
     bit_decomp_inv(a)).collect()
 }
 
-pub fn flatten(bits: &Vec<Fp>) -> Vec<Fp> {
-    bit_decomp(&bit_decomp_inv(&bits))
+pub fn flatten(bits: &mut Vec<Fp>) {
+    bit_decomp(&mut bit_decomp_inv(&bits))
 }
 
 // "When A is a matrix, let BitDecomp(A), BitDecomp−1 , or Flatten(A) be 
 // the matrix formed by applying the operation to each row of A separately" 
-pub fn flatten_matrix(a_matrix: &Vec<Vec<Fp>>) -> Vec<Vec<Fp>> {
-    a_matrix.iter().map(|a| 
-    flatten(a)).collect()
+pub fn flatten_matrix(a_matrix: &mut Vec<Vec<Fp>>) {
+    a_matrix.iter_mut().for_each(|a| flatten(a));
 }
 
 /// PowersOf2: (b_1, 2b_1, ..., 2^{l-1}b_1, ..., b_k, ..., 2^{l-1}b_k)
@@ -156,17 +152,23 @@ mod tests {
     use rand::{Rng};
     use super::*;
 
+
+    // #[cfg(feature = "use_flatten")]
     #[test]
     fn gadget_vector_has_correct_size() {
         assert_eq!(GADGET_VECTOR.len(), Fp::NUM_BITS as usize)
     }
+
+    // #[cfg(feature = "use_flatten")]
     #[test]
     fn test_bit_decomp_and_inv_for_field() {
         for _ in 0..10 {
             let mut rng = rand::rng();
             let input: Vec<Fp> = (0..10).map(|_| Fp::from(rng.random::<u64>())).collect();
 
-            let decomposed = bit_decomp(&input);
+            let mut decomposed = input.clone();
+            bit_decomp(&mut decomposed);
+            assert_ne!(decomposed, input);
             assert_eq!(decomposed.len(), input.len()*L);
 
             let reconstructed = bit_decomp_inv(&decomposed);
@@ -184,7 +186,8 @@ mod tests {
             let a: Vec<Fp> = (0..10).map(|_| Fp::from(rng.random::<u64>())).collect();
             let b: Vec<Fp> = (0..10).map(|_| Fp::from(rng.random::<u64>())).collect();
 
-            let bd_a = bit_decomp(&a);
+            let mut bd_a = a.clone();
+            bit_decomp(&mut bd_a);
             let po2_b = powers_of_2(&b);
             assert_eq!(bd_a.len(), po2_b.len(), "Length mismatch in decomp vs powers_of_two.");
 
