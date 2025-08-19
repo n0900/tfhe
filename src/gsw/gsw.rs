@@ -50,8 +50,8 @@ pub fn flatten(bits: &Vec<Fp>) -> Vec<Fp> {
     bit_decomp(&bit_decomp_inv(&bits))
 }
 
-/// "When A is a matrix, let BitDecomp(A), BitDecomp−1 , or Flatten(A) be 
-/// the matrix formed by applying the operation to each row of A separately"
+// "When A is a matrix, let BitDecomp(A), BitDecomp−1 , or Flatten(A) be 
+// the matrix formed by applying the operation to each row of A separately" 
 pub fn flatten_matrix(a_matrix: &Vec<Vec<Fp>>) -> Vec<Vec<Fp>> {
     a_matrix.iter().map(|a| 
     flatten(a)).collect()

@@ -40,7 +40,7 @@ impl DiscrGaussianSampler {
     //completely made up number
     pub fn default() -> Self {
         Self {
-            sampler: DiscreteGaussian::new(Ratio::<BigUint>::new(BigUint::from(15u32), BigUint::from(1u32))).unwrap()
+            sampler: DiscreteGaussian::new(Ratio::<BigUint>::new(BigUint::from(2u32), BigUint::from(1u32))).unwrap()
         }
     }
 }

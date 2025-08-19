@@ -4,13 +4,15 @@ pub mod gsw;
 
 use std::ops::Mul;
 
-use ff::{Field, PrimeField, PrimeFieldBits};
+use ff::{Field, PrimeFieldBits};
 
 use crate::{
     error_sampling::{rnd_fp_vec, ErrorSampling}, field::{Fp, L, P}, gsw::{gsw::{
         add_matrix_matrix_fp, add_to_diagonal, bit_decomp_matrix, dot_product_fp, flatten_matrix, mult_const_matrix_fp, mult_matrix_matrix_fp, mult_matrix_vector_fp, negate_matrix_fp
     }, pk::GswPk, sk::GswSk}
 };
+
+pub const USE_FLATTEN: bool = false;
 
 pub trait FheScheme {
     type SecretKey;
@@ -53,14 +55,14 @@ impl<T: ErrorSampling> FheScheme for GSW<T> {
     fn encrypt(&self, pk: &Self::PublicKey, message: Fp) -> Self::Ciphertext {
         let big_n: usize = L.mul((self.n + 1) as usize);
         let random_matrix = (0..big_n).map(|_| rnd_fp_vec(self.m as usize, 0, 1)).collect();
-        flatten_matrix(
-            &add_to_diagonal(
+        let res =
+            add_to_diagonal(
                 &bit_decomp_matrix(
                     &mult_matrix_matrix_fp(&random_matrix, &pk.pk_matrix)
                 ),
                 message
-            )
-        )
+            );
+        if USE_FLATTEN {flatten_matrix(&res)} else {res}
     }
 
     fn decrypt(&self, sk: &Self::SecretKey, ciphertext: &Self::Ciphertext) -> Fp {
@@ -91,28 +93,31 @@ impl<T: ErrorSampling> FheScheme for GSW<T> {
     fn add(&self, ciphertext1: &Self::Ciphertext, cipertext2: &Self::Ciphertext) -> Self::Ciphertext {
         assert_eq!(ciphertext1.len(), cipertext2.len(), "Cannot add Ciphertexts because they are different sizes");
         assert_eq!(ciphertext1.first().unwrap().len(), cipertext2.first().unwrap().len(), "Cannot add Ciphertexts because they are different sizes");
-        flatten_matrix(&add_matrix_matrix_fp(ciphertext1, cipertext2))
+        let res = add_matrix_matrix_fp(ciphertext1, cipertext2);
+        if USE_FLATTEN {flatten_matrix(&res)} else {res}
     }
 
     // flatten(C*a)
     fn mult_const(&self, ciphertext: &Self::Ciphertext, constant: Fp) -> Self::Ciphertext {
-        flatten_matrix(&mult_const_matrix_fp(&ciphertext, constant))
+        let res = mult_const_matrix_fp(&ciphertext, constant);
+        if USE_FLATTEN {flatten_matrix(&res)} else {res}
     }
 
     // flatten(C1*C2)
     fn mult(&self, ciphertext1: &Self::Ciphertext, cipertext2: &Self::Ciphertext) -> Self::Ciphertext {
         assert_eq!(ciphertext1.len(), cipertext2.len(), "Cannot mult Ciphertexts because they are different sizes");
         assert_eq!(ciphertext1.first().unwrap().len(), cipertext2.first().unwrap().len(), "Cannot mult Ciphertexts because they are different sizes");
-        flatten_matrix(&mult_matrix_matrix_fp(ciphertext1, cipertext2))
+        let res = mult_matrix_matrix_fp(ciphertext1, cipertext2);
+        if USE_FLATTEN {flatten_matrix(&res)} else {res}
     }
 
     // flatten(I - C1*C2)
     fn nand(&self, ciphertext1: &Self::Ciphertext, cipertext2: &Self::Ciphertext) -> Self::Ciphertext {
-        flatten_matrix(
-            &add_to_diagonal(
+        let res = add_to_diagonal(
                 &negate_matrix_fp(&mult_matrix_matrix_fp(ciphertext1, cipertext2)), 
-                Fp::ONE)
-            )
+                Fp::ONE);
+            
+        if USE_FLATTEN {flatten_matrix(&res)} else {res}
     }
 }
 
