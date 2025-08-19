@@ -25,6 +25,7 @@ pub const L: usize = Fp::NUM_BITS as usize;
 // #[cfg(not(feature = "use_flatten"))]
 // pub const L: usize = 1;
 
+//TODO when umstellen auch gadget vec umstellen auf 1,.., 2^logq
 pub static GADGET_VECTOR: Lazy<Vec<Fp>> = Lazy::new(|| {
     (0..Fp::NUM_BITS)
         .map(|l| Fp::from(1u64 << l))

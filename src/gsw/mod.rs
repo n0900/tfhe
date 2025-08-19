@@ -56,21 +56,17 @@ impl<T: ErrorSampling> FheScheme for GSW<T> {
         let random_matrix = (0..big_n).map(|_| rnd_fp_vec(self.m as usize, 0, 1)).collect();
         let mut product = mult_matrix_matrix_fp(&random_matrix, &pk.pk_matrix);
         bit_decomp_matrix(&mut product);
-        let mut matrix_sum =
-            add_to_diagonal(
-                &product,
-                message
-            );
-        flatten_matrix(&mut matrix_sum);
-        matrix_sum
+        add_to_diagonal(&mut product,message);
+        flatten_matrix(&mut product);
+        product
     }
 
     fn decrypt(&self, sk: &Self::SecretKey, ciphertext: &Self::Ciphertext) -> Fp {
         let i = 64 - (P / 3).leading_zeros() as usize; //efficient log2(P/3) (only for u64!)
         let mut decomped = ciphertext.clone();
         
-        // Bit Decomp is not optional!
-        bit_decomp_matrix(&mut decomped);
+        // Bit Decomp is only necessary if its deactivated in cfg!
+        // bit_decomp_matrix(&mut decomped);
         let x_i = dot_product_fp(&decomped[i], &sk.v);
         let v_i = sk.v[i].invert().unwrap();
         x_i * v_i
@@ -121,9 +117,9 @@ impl<T: ErrorSampling> FheScheme for GSW<T> {
     fn nand(&self, ciphertext1: &Self::Ciphertext, cipertext2: &Self::Ciphertext) -> Self::Ciphertext {
         let mut prod = mult_matrix_matrix_fp(ciphertext1, cipertext2);
         negate_matrix_fp(&mut prod);
-        let mut res = add_to_diagonal(&prod, Fp::ONE);
-        flatten_matrix(&mut res);
-        res
+        add_to_diagonal(&mut prod, Fp::ONE);
+        flatten_matrix(&mut prod);
+        prod
     }
 }
 
