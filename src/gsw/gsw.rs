@@ -19,32 +19,39 @@ pub fn bit_decomp_matrix(a_matrix: &mut Vec<Vec<Fp>>) {
 }
 
 /// Inverse operation; only supports [u64;1] for now but could be expanded.
-pub fn bit_decomp_inv(bits: &Vec<Fp>) -> Vec<Fp> {
-    bits.chunks(L)
-        .map(|chunk| {
-            // Convert chunk into little-endian u64 representation
-            let mut repr = 0u64; // because Fp uses [u64;1]
+pub fn bit_decomp_inv(bits: &mut Vec<Fp>) {
+    assert!(
+        bits.len() % L == 0,
+        "bit_decomp_inv: input length must be a multiple of L"
+    );
 
-            // Fill bits into repr[0]
-            for (i, bit) in chunk.iter().enumerate() {
-                if *bit == Fp::ONE {
-                    repr |= 1 << i;
-                }
+    let out_len = bits.len() / L;
+    let mut tmp = Vec::with_capacity(out_len);
+
+    for chunk in bits.chunks(L) {
+        let mut repr: u64 = 0; // Fp uses [u64; 1] per your comment
+
+        for (i, bit) in chunk.iter().enumerate() {
+            if *bit == Fp::ONE {
+                repr |= 1u64 << i;
             }
-            Fp::from(repr)
-        })
-        .collect()
+        }
+
+        tmp.push(Fp::from(repr));
+    }
+
+    *bits = tmp; // replace contents — same pattern as your bit_decomp replacement
 }
 
 /// "When A is a matrix, let BitDecomp(A), BitDecomp−1 , or Flatten(A) be 
 /// the matrix formed by applying the operation to each row of A separately"
-pub fn bit_decomp_inv_matrix(a_matrix: &Vec<Vec<Fp>>) -> Vec<Vec<Fp>> {
-    a_matrix.iter().map(|a| 
-    bit_decomp_inv(a)).collect()
+pub fn bit_decomp_inv_matrix(a_matrix: &mut Vec<Vec<Fp>>) {
+    a_matrix.iter_mut().for_each(|row| bit_decomp_inv(row));
 }
 
 pub fn flatten(bits: &mut Vec<Fp>) {
-    bit_decomp(&mut bit_decomp_inv(&bits))
+    bit_decomp_inv(bits);
+    bit_decomp(bits);
 }
 
 // "When A is a matrix, let BitDecomp(A), BitDecomp−1 , or Flatten(A) be 
@@ -64,10 +71,12 @@ pub fn powers_of_2(b: &Vec<Fp>) -> Vec<Fp> {
     out
 }
 
-pub fn negate_matrix_fp(a: &Vec<Vec<Fp>>) -> Vec<Vec<Fp>> {
-    a.iter()
-        .map(|row| { row.iter().map(|entry| -*entry).collect() })
-        .collect()
+pub fn negate_matrix_fp(a: &mut Vec<Vec<Fp>>) {
+    a.iter_mut().for_each(|row|
+        row.iter_mut().for_each(|entry|
+            *entry = -*entry
+        )
+    );
 }
 
 // Helper: dot product over field elements
@@ -102,16 +111,13 @@ pub fn add_matrix_matrix_fp(a: &Vec<Vec<Fp>>, b: &Vec<Vec<Fp>>) -> Vec<Vec<Fp>> 
         .collect()
 }
 
-
-pub fn mult_const_vec_fp(a: &Vec<Fp>, constant: Fp) -> Vec<Fp> {
-    a.iter().map(|x| *x * constant).collect()
+pub fn mult_const_vec_fp(a: &mut Vec<Fp>, constant: Fp) {
+    a.iter_mut().for_each(|entry| *entry = *entry * constant);
 }
 
-
-pub fn mult_const_matrix_fp(a: &Vec<Vec<Fp>>, constant: Fp) -> Vec<Vec<Fp>> {
-    a.iter()
-        .map(|row_a| { mult_const_vec_fp(row_a, constant) })
-        .collect()
+pub fn mult_const_matrix_fp(a: &mut Vec<Vec<Fp>>, constant: Fp) {
+    a.iter_mut()
+        .for_each(|row| { mult_const_vec_fp(row, constant) });
 }
 
 pub fn mult_matrix_matrix_fp(a: &Vec<Vec<Fp>>, b: &Vec<Vec<Fp>>) -> Vec<Vec<Fp>> {
@@ -171,9 +177,9 @@ mod tests {
             assert_ne!(decomposed, input);
             assert_eq!(decomposed.len(), input.len()*L);
 
-            let reconstructed = bit_decomp_inv(&decomposed);
+            let mut reconstructed = decomposed.clone();
+            bit_decomp_inv(&mut reconstructed);
             assert_eq!(reconstructed.len(), input.len());
-
             assert_eq!(input, reconstructed);
         }
     }

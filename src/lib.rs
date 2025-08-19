@@ -19,8 +19,9 @@ pub trait TfheScheme {
     fn encrypt(&self, pk: &Self::PublicKey, message: Fp) -> Self::Ciphertext;
     fn part_dec(&self, pk: &Self::PublicKey, ciphertext: Self::Ciphertext, party: Party);
     // fn fin_dec();
+    
     fn add(&self, ciphertext1: &Self::Ciphertext, ciphertext2: &Self::Ciphertext) -> Self::Ciphertext;
-    fn mult_const(&self, ciphertext: &Self::Ciphertext, constant: Fp) -> Self::Ciphertext;
+    fn mult_const(&self, ciphertext: &mut Self::Ciphertext, constant: Fp);
     fn mult(&self, ciphertext1: &Self::Ciphertext, ciphertext2: &Self::Ciphertext) -> Self::Ciphertext;
     fn nand(&self, ciphertext1: &Self::Ciphertext, ciphertext2: &Self::Ciphertext) -> Self::Ciphertext;
 }
@@ -55,8 +56,8 @@ where
     fn add(&self, ciphertext1: &Self::Ciphertext, ciphertext2: &Self::Ciphertext) -> Self::Ciphertext {
         self.fhe_scheme.add(ciphertext1, ciphertext2)
     }
-
-    fn mult_const(&self, ciphertext: &Self::Ciphertext, constant: Fp) -> Self::Ciphertext {
+    
+    fn mult_const(&self, ciphertext: &mut Self::Ciphertext, constant: Fp) {
         self.fhe_scheme.mult_const(ciphertext, constant)
     }
 

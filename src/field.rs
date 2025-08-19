@@ -18,7 +18,12 @@ pub const P: u64 = 2147483647;
 
 
 // Assume NUM_BITS < usize::MAX else panic (u32 on 32-bit systems, u64 on 64-bit systems)
+// Only relevant when flattening
+// #[cfg(feature = "use_flatten")]
 pub const L: usize = Fp::NUM_BITS as usize;
+
+// #[cfg(not(feature = "use_flatten"))]
+// pub const L: usize = 1;
 
 pub static GADGET_VECTOR: Lazy<Vec<Fp>> = Lazy::new(|| {
     (0..Fp::NUM_BITS)
