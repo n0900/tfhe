@@ -2,17 +2,17 @@ pub mod dimacs;
 pub mod mbf;
 
 
-use crate::{field::Fp, zo_sss::{dimacs::DIMACS, mbf::{mbf_combine, mbf_share}}};
+use crate::{field::Fp, zo_sss::{dimacs::DIMACS, mbf::{mbf_combine, mbf_share}}, RingElement};
 
 #[derive(Clone)]
-pub struct Party {
+pub struct Party<R: RingElement> {
     pub name: u8,
-    pub shares: Vec<Vec<Fp>>
+    pub shares: Vec<Vec<R>>
 }
 
-pub trait SecretSharingScheme {
-    fn share(&self, secrets: Vec<Fp>) -> Vec<Party>;
-    fn combine(&self, parties: Vec<Party>, is_minimal: bool) -> Vec<Fp>;
+pub trait SecretSharingScheme<R:RingElement> {
+    fn share(&self, secrets: Vec<R>) -> Vec<Party<R>>;
+    fn combine(&self, parties: Vec<Party<R>>, is_minimal: bool) -> Vec<R>;
 }
 
 /// It is the users responsibility to use a correct dimacs!
@@ -23,13 +23,13 @@ pub struct Shamir {
     dimacs: DIMACS
 }
 
-impl SecretSharingScheme for Shamir {
-    fn share(&self, secrets: Vec<Fp>) -> Vec<Party> {
+impl<R:RingElement> SecretSharingScheme<R> for Shamir {
+    fn share(&self, secrets: Vec<R>) -> Vec<Party<R>> {
         mbf_share(secrets, &self.dimacs)
     }
 
-    fn combine(&self, parties: Vec<Party>, _is_minimal: bool) -> Vec<Fp> {
-        let subset: Vec<Party> = if parties.len() >= (self.k as usize) {
+    fn combine(&self, parties: Vec<Party<R>>, _is_minimal: bool) -> Vec<R> {
+        let subset: Vec<Party<R>> = if parties.len() >= (self.k as usize) {
             parties.iter().take(self.k as usize).cloned().collect()
         } else { panic!("Invalid party size") };
         mbf_combine(subset, true, &self.dimacs)

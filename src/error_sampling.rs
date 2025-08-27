@@ -1,6 +1,7 @@
-use crate::{field::{Fp, P}};
+use crate::{field::{Fp, P}, RingElement};
 
 use ff::Field;
+use nalgebra::{DVector, SVector};
 use num_bigint::{BigUint, Sign};
 use num_rational::Ratio;
 use once_cell::sync::Lazy;
@@ -20,9 +21,10 @@ pub fn rnd_fp(min: u64, max: u64) -> Fp {
     Fp::from(rng.random_range(min..=max))
 }
 
-pub trait ErrorSampling {
-    fn rnd_fp(&self) -> Fp;
-    fn rnd_fp_vec(&self, size: usize) -> Vec<Fp>;
+// TODO Decide between SVector and DVector
+pub trait ErrorSampling<R: RingElement> {
+    fn rnd_fp(&self) -> R;
+    fn rnd_fp_vec(&self, size: usize) -> DVector<R>;
 }
 
 pub struct DiscrGaussianSampler {
@@ -45,7 +47,7 @@ impl DiscrGaussianSampler {
     }
 }
 
-impl ErrorSampling for DiscrGaussianSampler {
+impl ErrorSampling<Fp> for DiscrGaussianSampler {
     fn rnd_fp(&self) -> Fp {
         let mut rng = rng();
         let (sign, digits) = self.sampler.sample(&mut rng).to_u64_digits();
@@ -58,21 +60,22 @@ impl ErrorSampling for DiscrGaussianSampler {
         }
     } 
 
-    fn rnd_fp_vec(&self, size: usize) -> Vec<Fp> {
-        (0..size).map(|_| Self::rnd_fp(self)).collect()
+    fn rnd_fp_vec(&self, size: usize) -> DVector<Fp> {
+        DVector::from_iterator(size, (0..size).map(|_| Self::rnd_fp(self)))
     }
+
 }
 
 pub struct NaiveSampler;
 
-impl ErrorSampling for NaiveSampler {
+impl ErrorSampling<Fp> for NaiveSampler {
     fn rnd_fp(&self) -> Fp {
         let mut rng = rng();
         Fp::from(rng.random_range(0..P/4)) * *NOISE_CONST
     }
 
-    fn rnd_fp_vec(&self, size: usize) -> Vec<Fp> {
-        (0..size).map(|_| Self::rnd_fp(self)).collect()
+    fn rnd_fp_vec(&self, size: usize) -> DVector<Fp> {
+        DVector::from_iterator(size, (0..size).map(|_| Self::rnd_fp(self)))
     }
 }
 
@@ -86,7 +89,7 @@ mod test {
         // check that random numbers are not all equal
         let gaussian = DiscrGaussianSampler::default();
         let rnd_vec = gaussian.rnd_fp_vec(100);
-        println!("First 5 samples: {:?}", &rnd_vec[..5]);
+        println!("First 5 samples: {:?}", &rnd_vec.as_slice()[..5]);
 
         assert_eq!(rnd_vec.len(), 100);
         let first = &rnd_vec[0];

@@ -7,17 +7,15 @@ use crate::{
     }, pk::GswPk, sk::GswSk, FheScheme, GSW}
 };
 
-impl<T: ErrorSampling> FheScheme for GSW<T> {
-    type SecretKey = GswSk;
+impl<T: ErrorSampling<Fp>> FheScheme<Fp> for GSW<Fp, T> {
+    type SecretKey = GswSk<Fp>;
     type PublicKey = GswPk;
-    type Message = Fp;
-    type Constant = Fp;
     type Ciphertext = Vec<Vec<Fp>>;
 
     fn keygen(&self) -> (Self::SecretKey, Self::PublicKey) {
         let sk = GswSk::new(rnd_fp_vec(self.n as usize, 0, P-1));  
           
-        let err = self.err_sampling.rnd_fp_vec(self.m as usize);    
+        let err: Vec<Fp> = self.err_sampling.rnd_fp_vec(self.m as usize).iter().map(|x| *x).collect();    
         let random_matrix: Vec<Vec<Fp>> = (0..err.len())
             .map(|_| rnd_fp_vec(self.n as usize, 0, P-1))
             .collect();
@@ -26,7 +24,7 @@ impl<T: ErrorSampling> FheScheme for GSW<T> {
         (sk, pk)   
     }
 
-    fn encrypt(&self, pk: &Self::PublicKey, message: Self::Message) -> Self::Ciphertext {
+    fn encrypt(&self, pk: &Self::PublicKey, message: Fp) -> Self::Ciphertext {
         #[cfg(feature="use_flatten")]
         let big_n: usize = L * ((self.n + 1) as usize);
         #[cfg(not(feature="use_flatten"))]
@@ -46,7 +44,7 @@ impl<T: ErrorSampling> FheScheme for GSW<T> {
         product
     }
 
-    fn decrypt(&self, sk: &Self::SecretKey, ciphertext: &Self::Ciphertext) -> Self::Message {
+    fn decrypt(&self, sk: &Self::SecretKey, ciphertext: &Self::Ciphertext) -> Fp {
         let i = 64 - (P / 3).leading_zeros() as usize; //efficient log2(P/3) (only for u64!)
         let v_i = sk.v[i].invert().unwrap();
         // Bit Decomp is only necessary if its deactivated in cfg!
@@ -65,7 +63,7 @@ impl<T: ErrorSampling> FheScheme for GSW<T> {
         }
     }
 
-    fn mp_decrypt(&self, _sk: &Self::SecretKey, _ciphertext: &Self::Ciphertext) -> Self::Message {
+    fn mp_decrypt(&self, _sk: &Self::SecretKey, _ciphertext: &Self::Ciphertext) -> Fp {
         panic!("Only supported for pow2 rings!")
         // let test = mult_matrix_vector_fp(&ciphertext, &sk.v);
         // let mut out: u64 = 0;
@@ -94,7 +92,7 @@ impl<T: ErrorSampling> FheScheme for GSW<T> {
     }
 
     // flatten(C*a)
-    fn mult_const(&self, ciphertext: &mut Self::Ciphertext, constant: Self::Constant) {
+    fn mult_const(&self, ciphertext: &mut Self::Ciphertext, constant: Fp) {
         mult_const_matrix_fp(ciphertext, constant);
         #[cfg(feature="use_flatten")]
         flatten_matrix(ciphertext);
@@ -124,6 +122,8 @@ impl<T: ErrorSampling> FheScheme for GSW<T> {
 
 #[cfg(test)]
 mod tests {
+    use std::marker::PhantomData;
+
     use ff::PrimeField;
     use ff::{Field};
     use rand::Rng;
@@ -157,21 +157,37 @@ mod tests {
 
     #[test]
     fn encryption_decryption_naive() {
-        let naive_gsw = GSW {n:10, m: 10*L, err_sampling: NaiveSampler };
+        let naive_gsw = GSW::<Fp, NaiveSampler> {
+            n: 10,
+            m: 10 * L,
+            err_sampling: NaiveSampler,
+            _marker: PhantomData,
+        };
         test_inputs(naive_gsw);
     }
 
 
     #[test]
     fn encryption_decryption_discr_gaussian() {
-        let gaussian_gsw = GSW {n:10, m: 10*L, err_sampling: DiscrGaussianSampler::default() };
+        let gaussian_gsw = GSW::<Fp, DiscrGaussianSampler> {
+            n:10, 
+            m: 10*L, 
+            err_sampling: DiscrGaussianSampler::default(), 
+            _marker: PhantomData
+        };
         test_inputs(gaussian_gsw);
     }
 
 
     #[test]
     fn encryption_decryption_pow_of_two() {
-        let fhe = GSW {n:10, m: 5, err_sampling: DiscrGaussianSampler::default() };
+        let fhe = GSW::<Fp, DiscrGaussianSampler> {
+            n:10, 
+            m: 5, 
+            err_sampling: DiscrGaussianSampler::default(),
+            _marker: PhantomData 
+        };
+        
         let (sk, pk) = fhe.keygen();
 
         let encr = fhe.encrypt(&pk, Fp::ZERO);
@@ -191,7 +207,7 @@ mod tests {
         }
     }
 
-    fn test_inputs<T: FheScheme<Message = Fp>>(fhe: T) {
+    fn test_inputs<T: FheScheme<Fp>>(fhe: T) {
         let (sk, pk) = fhe.keygen();
 
         let mut encr = fhe.encrypt(&pk, Fp::ZERO);
