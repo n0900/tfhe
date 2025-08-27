@@ -23,13 +23,13 @@ pub struct Shamir {
     dimacs: DIMACS
 }
 
-impl<R:RingElement> SecretSharingScheme<R> for Shamir {
-    fn share(&self, secrets: Vec<R>) -> Vec<Party<R>> {
+impl SecretSharingScheme<Fp> for Shamir {
+    fn share(&self, secrets: Vec<Fp>) -> Vec<Party<Fp>> {
         mbf_share(secrets, &self.dimacs)
     }
 
-    fn combine(&self, parties: Vec<Party<R>>, _is_minimal: bool) -> Vec<R> {
-        let subset: Vec<Party<R>> = if parties.len() >= (self.k as usize) {
+    fn combine(&self, parties: Vec<Party<Fp>>, _is_minimal: bool) -> Vec<Fp> {
+        let subset: Vec<Party<Fp>> = if parties.len() >= (self.k as usize) {
             parties.iter().take(self.k as usize).cloned().collect()
         } else { panic!("Invalid party size") };
         mbf_combine(subset, true, &self.dimacs)
@@ -40,19 +40,19 @@ pub struct MBF {
     dimacs: DIMACS
 }
 
-impl SecretSharingScheme for MBF {
-    fn share(&self, secrets: Vec<Fp>) -> Vec<Party> {
+impl SecretSharingScheme<Fp> for MBF {
+    fn share(&self, secrets: Vec<Fp>) -> Vec<Party<Fp>> {
         mbf_share(secrets, &self.dimacs)
     }
 
-    fn combine(&self, parties: Vec<Party>, is_minimal: bool) -> Vec<Fp> {
+    fn combine(&self, parties: Vec<Party<Fp>>, is_minimal: bool) -> Vec<Fp> {
         mbf_combine(parties, is_minimal, &self.dimacs)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{error_sampling::rnd_fp_vec, field::P, zo_sss::{dimacs::{DIMACS, DIMACS_2_OF_3_SCHEME, DIMACS_AB_OR_CD}, SecretSharingScheme, Shamir, MBF}};
+    use crate::{error_sampling::rnd_fp_vec, field::{Fp, P}, zo_sss::{dimacs::{DIMACS, DIMACS_2_OF_3_SCHEME, DIMACS_AB_OR_CD}, SecretSharingScheme, Shamir, MBF}};
 
     #[test]
     fn shamir_struct_test() {
@@ -66,7 +66,7 @@ mod tests {
         sss_test(mbf);
     }
 
-    fn sss_test<T: SecretSharingScheme>(scheme: T) {
+    fn sss_test<T: SecretSharingScheme<Fp>>(scheme: T) {
         let secrets = rnd_fp_vec(5, 0, P-1);
         let copy_secrets = secrets.clone();
         let parties = scheme.share(secrets);

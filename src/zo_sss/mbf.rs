@@ -7,13 +7,13 @@ use crate::{error_sampling::rnd_fp, field::{Fp, P}, zo_sss::{dimacs::DIMACS, Par
 /// # Parameters
 /// - `secrets`: A set of secrets in Fp.
 /// - `dimacs`: The monotone boolean formula (MBF) defining the access structure.
-pub fn mbf_share(secrets: Vec<Fp>, dimacs: &DIMACS) -> Vec<Party> {
+pub fn mbf_share(secrets: Vec<Fp>, dimacs: &DIMACS) -> Vec<Party<Fp>> {
     let num = dimacs.num_clauses as usize;
     let w_matrix: Vec<Vec<Fp>> = build_w_matrix(secrets, num);
     get_parties(w_matrix, dimacs)
 }
 
-fn get_parties(w_matrix: Vec<Vec<Fp>>, dimacs: &DIMACS) -> Vec<Party> {
+fn get_parties(w_matrix: Vec<Vec<Fp>>, dimacs: &DIMACS) -> Vec<Party<Fp>> {
     dimacs.partitions
         .iter()
         .enumerate()
@@ -87,8 +87,8 @@ fn build_w(secret: Fp, num: usize) -> Vec<Fp> {
 /// - `index`: Indicates which secret to reconstruct.
 /// - `is_minimal`: If `true`, skips computing the minimal subset.
 /// - `dimacs`: The monotone boolean formula (MBF) defining the access structure.
-pub fn mbf_combine(parties: Vec<Party>, is_minimal: bool, dimacs: &DIMACS) -> Vec<Fp> {
-    let min_set: Vec<Party> = if !is_minimal {
+pub fn mbf_combine(parties: Vec<Party<Fp>>, is_minimal: bool, dimacs: &DIMACS) -> Vec<Fp> {
+    let min_set: Vec<Party<Fp>> = if !is_minimal {
         get_min_party(&parties, dimacs)
     } else { parties };
 
@@ -98,14 +98,14 @@ pub fn mbf_combine(parties: Vec<Party>, is_minimal: bool, dimacs: &DIMACS) -> Ve
         .collect()
 }
 
-pub fn get_min_party(parties: &Vec<Party>, dimacs: &DIMACS) -> Vec<Party> {
+pub fn get_min_party(parties: &Vec<Party<Fp>>, dimacs: &DIMACS) -> Vec<Party<Fp>> {
     let min_set_names: HashSet<u8> = find_min_sat(parties.iter().map(|p| p.name as u8).collect(), dimacs).unwrap();
     get_parties_by_name(&parties, &min_set_names)
 }
 
 // Cannot use HashSet<Fp> bc Fp does not implement Hash
 // -> manual deduplication
-fn get_party_shares(parties: &Vec<Party>, index: usize) -> Vec<Fp> {
+fn get_party_shares(parties: &Vec<Party<Fp>>, index: usize) -> Vec<Fp> {
     let mut all_shares: Vec<Fp> = parties.iter()
         .flat_map(|p| p.shares[index].iter().cloned())
         .collect();
@@ -115,7 +115,7 @@ fn get_party_shares(parties: &Vec<Party>, index: usize) -> Vec<Fp> {
     all_shares
 }
 
-fn get_parties_by_name(parties: &Vec<Party>, names: &HashSet<u8>) -> Vec<Party> {
+fn get_parties_by_name(parties: &Vec<Party<Fp>>, names: &HashSet<u8>) -> Vec<Party<Fp>> {
     parties
         .iter()
         .filter(|p| names.contains(&(p.name as u8)))
