@@ -151,8 +151,8 @@ mod tests {
     #[test]
     fn test_mul() {
         let a = Z8::new(3);
-        let b = Z8::new(5);
-        assert_eq!((a * b).value(), 7); // 15 ≡ 7
+        let b = Z8::new(15);
+        assert_eq!((a * b).value(), 5); // 45 ≡ 5
     }
 
     #[test]

@@ -13,12 +13,13 @@ use crate::{
 pub trait FheScheme {
     type SecretKey;
     type PublicKey;
+    type Message;
     type Ciphertext;
 
     fn keygen(&self) -> (Self::SecretKey, Self::PublicKey);
     fn encrypt(&self, pk: &Self::PublicKey, message: Fp) -> Self::Ciphertext;
-    fn decrypt(&self, sk: &Self::SecretKey, ciphertext: &Self::Ciphertext) -> Fp;
-    fn mp_decrypt(&self, sk: &Self::SecretKey, ciphertext: &Self::Ciphertext) -> Fp;
+    fn decrypt(&self, sk: &Self::SecretKey, ciphertext: &Self::Ciphertext) -> Self::Message;
+    fn mp_decrypt(&self, sk: &Self::SecretKey, ciphertext: &Self::Ciphertext) -> Self::Message;
 
     fn add(&self, ciphertext1: &Self::Ciphertext, ciphertext2: &Self::Ciphertext) -> Self::Ciphertext;
     fn mult_const(&self, ciphertext: &mut Self::Ciphertext, constant: Fp);
@@ -26,6 +27,8 @@ pub trait FheScheme {
     fn nand(&self, ciphertext1: &Self::Ciphertext, ciphertext2: &Self::Ciphertext) -> Self::Ciphertext;
 }
 
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GSW<T: ErrorSampling> {
     n: usize,
     m: usize,
@@ -35,6 +38,7 @@ pub struct GSW<T: ErrorSampling> {
 impl<T: ErrorSampling> FheScheme for GSW<T> {
     type SecretKey = GswSk;
     type PublicKey = GswPk;
+    type Message = Fp;
     type Ciphertext = Vec<Vec<Fp>>;
 
     fn keygen(&self) -> (Self::SecretKey, Self::PublicKey) {
@@ -69,7 +73,7 @@ impl<T: ErrorSampling> FheScheme for GSW<T> {
         product
     }
 
-    fn decrypt(&self, sk: &Self::SecretKey, ciphertext: &Self::Ciphertext) -> Fp {
+    fn decrypt(&self, sk: &Self::SecretKey, ciphertext: &Self::Ciphertext) -> Self::Message {
         let i = 64 - (P / 3).leading_zeros() as usize; //efficient log2(P/3) (only for u64!)
         let v_i = sk.v[i].invert().unwrap();
         // Bit Decomp is only necessary if its deactivated in cfg!
@@ -88,21 +92,22 @@ impl<T: ErrorSampling> FheScheme for GSW<T> {
         }
     }
 
-    fn mp_decrypt(&self, sk: &Self::SecretKey, ciphertext: &Self::Ciphertext) -> Fp {
-        let test = mult_matrix_vector_fp(&ciphertext, &sk.v);
-        let mut out: u64 = 0;
-        let mut i = 0;
+    fn mp_decrypt(&self, _sk: &Self::SecretKey, _ciphertext: &Self::Ciphertext) -> Self::Message {
+        panic!("Only supported for pow2 rings!")
+        // let test = mult_matrix_vector_fp(&ciphertext, &sk.v);
+        // let mut out: u64 = 0;
+        // let mut i = 0;
 
-        // collect LSBs
-        for entry in test.iter().rev() {
-            out ^= entry.to_le_bits()[i] as u64;
-            i+=1;
-            if i>= L {
-                break;
-            }
-        }
+        // // collect LSBs
+        // for entry in test.iter().rev() {
+        //     out ^= entry.to_le_bits()[i] as u64;
+        //     i+=1;
+        //     if i>= L {
+        //         break;
+        //     }
+        // }
 
-        Fp::from(out)
+        // Fp::from(out)
     }
 
     // flatten(C1+C2)
@@ -212,7 +217,7 @@ mod tests {
         }
     }
 
-    fn test_inputs<T: FheScheme>(fhe: T) {
+    fn test_inputs<T: FheScheme<Message = Fp>>(fhe: T) {
         let (sk, pk) = fhe.keygen();
 
         let mut encr = fhe.encrypt(&pk, Fp::ZERO);
