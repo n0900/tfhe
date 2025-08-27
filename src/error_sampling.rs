@@ -17,7 +17,7 @@ pub fn rnd_fp_vec(size: usize, min: u64, max: u64) -> Vec<Fp> {
 pub fn rnd_fp(min: u64, max: u64) -> Fp {
     assert!(max <= P);
     let mut rng = rand::rng();
-    Fp::from(rng.random_range(min..max))
+    Fp::from(rng.random_range(min..=max))
 }
 
 pub trait ErrorSampling {
@@ -68,7 +68,7 @@ pub struct NaiveSampler;
 impl ErrorSampling for NaiveSampler {
     fn rnd_fp(&self) -> Fp {
         let mut rng = rng();
-        Fp::from(rng.random_range(0..P/2)) * *NOISE_CONST
+        Fp::from(rng.random_range(0..P/4)) * *NOISE_CONST
     }
 
     fn rnd_fp_vec(&self, size: usize) -> Vec<Fp> {
@@ -86,7 +86,7 @@ mod test {
         // check that random numbers are not all equal
         let gaussian = DiscrGaussianSampler::default();
         let rnd_vec = gaussian.rnd_fp_vec(100);
-        println!("First 5 samples: {:?}", &rnd_vec[..10.min(rnd_vec.len())]);
+        println!("First 5 samples: {:?}", &rnd_vec[..5]);
 
         assert_eq!(rnd_vec.len(), 100);
         let first = &rnd_vec[0];

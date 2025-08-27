@@ -10,8 +10,6 @@ use crate::{
     }, pk::GswPk, sk::GswSk}
 };
 
-pub const USE_FLATTEN: bool = true;
-
 pub trait FheScheme {
     type SecretKey;
     type PublicKey;
@@ -29,8 +27,8 @@ pub trait FheScheme {
 }
 
 pub struct GSW<T: ErrorSampling> {
-    n: u8,
-    m: u8,
+    n: usize,
+    m: usize,
     err_sampling: T,
 }
 
@@ -52,24 +50,42 @@ impl<T: ErrorSampling> FheScheme for GSW<T> {
     }
 
     fn encrypt(&self, pk: &Self::PublicKey, message: Fp) -> Self::Ciphertext {
+        #[cfg(feature="use_flatten")]
         let big_n: usize = L * ((self.n + 1) as usize);
+        #[cfg(not(feature="use_flatten"))]
+        let big_n: usize = (self.n + 1) as usize;
+
         let random_matrix = (0..big_n).map(|_| rnd_fp_vec(self.m as usize, 0, 1)).collect();
         let mut product = mult_matrix_matrix_fp(&random_matrix, &pk.pk_matrix);
+
+        #[cfg(feature="use_flatten")]
         bit_decomp_matrix(&mut product);
+
         add_to_diagonal(&mut product,message);
+
+        #[cfg(feature="use_flatten")]
         flatten_matrix(&mut product);
+
         product
     }
 
     fn decrypt(&self, sk: &Self::SecretKey, ciphertext: &Self::Ciphertext) -> Fp {
         let i = 64 - (P / 3).leading_zeros() as usize; //efficient log2(P/3) (only for u64!)
-        let mut decomped = ciphertext.clone();
-        
-        // Bit Decomp is only necessary if its deactivated in cfg!
-        // bit_decomp_matrix(&mut decomped);
-        let x_i = dot_product_fp(&decomped[i], &sk.v);
         let v_i = sk.v[i].invert().unwrap();
-        x_i * v_i
+        // Bit Decomp is only necessary if its deactivated in cfg!
+        #[cfg(feature="use_flatten")]
+        {
+            dot_product_fp(&ciphertext[i], &sk.v)* v_i
+        }
+        #[cfg(not(feature="use_flatten"))]
+        {
+            let mut flattened_ct = ciphertext.clone();
+            // bit_decomp_matrix(&mut flattened_ct);
+            flatten_matrix( &mut flattened_ct);
+            let testier = &flattened_ct[i];
+            let test = dot_product_fp(testier, &sk.v);
+            test * v_i
+        }
     }
 
     fn mp_decrypt(&self, sk: &Self::SecretKey, ciphertext: &Self::Ciphertext) -> Fp {
@@ -93,14 +109,16 @@ impl<T: ErrorSampling> FheScheme for GSW<T> {
     fn add(&self, ciphertext1: &Self::Ciphertext, cipertext2: &Self::Ciphertext) -> Self::Ciphertext {
         assert_eq!(ciphertext1.len(), cipertext2.len(), "Cannot add Ciphertexts because they are different sizes");
         assert_eq!(ciphertext1.first().unwrap().len(), cipertext2.first().unwrap().len(), "Cannot add Ciphertexts because they are different sizes");
-        let res = add_matrix_matrix_fp(ciphertext1, cipertext2);
-        // if USE_FLATTEN {flatten_matrix(&res)} else {res}
+        let mut res = add_matrix_matrix_fp(ciphertext1, cipertext2);
+        #[cfg(feature="use_flatten")]
+        flatten_matrix(&mut res);
         res
     }
 
     // flatten(C*a)
     fn mult_const(&self, ciphertext: &mut Self::Ciphertext, constant: Fp) {
         mult_const_matrix_fp(ciphertext, constant);
+        #[cfg(feature="use_flatten")]
         flatten_matrix(ciphertext);
     }
 
@@ -109,6 +127,7 @@ impl<T: ErrorSampling> FheScheme for GSW<T> {
         assert_eq!(ciphertext1.len(), cipertext2.len(), "Cannot mult Ciphertexts because they are different sizes");
         assert_eq!(ciphertext1.first().unwrap().len(), cipertext2.first().unwrap().len(), "Cannot mult Ciphertexts because they are different sizes");
         let mut res = mult_matrix_matrix_fp(ciphertext1, cipertext2);
+        #[cfg(feature="use_flatten")]
         flatten_matrix(&mut res);
         res
     }
@@ -118,6 +137,7 @@ impl<T: ErrorSampling> FheScheme for GSW<T> {
         let mut prod = mult_matrix_matrix_fp(ciphertext1, cipertext2);
         negate_matrix_fp(&mut prod);
         add_to_diagonal(&mut prod, Fp::ONE);
+        #[cfg(feature="use_flatten")]
         flatten_matrix(&mut prod);
         prod
     }
@@ -125,6 +145,7 @@ impl<T: ErrorSampling> FheScheme for GSW<T> {
 
 #[cfg(test)]
 mod tests {
+    use ff::PrimeField;
     use ff::{Field};
     use rand::Rng;
 
@@ -157,14 +178,14 @@ mod tests {
 
     #[test]
     fn encryption_decryption_naive() {
-        let naive_gsw = GSW {n:10, m: 5, err_sampling: NaiveSampler };
+        let naive_gsw = GSW {n:10, m: 10*L, err_sampling: NaiveSampler };
         test_inputs(naive_gsw);
     }
 
 
     #[test]
     fn encryption_decryption_discr_gaussian() {
-        let gaussian_gsw = GSW {n:10, m: 5, err_sampling: DiscrGaussianSampler::default() };
+        let gaussian_gsw = GSW {n:10, m: 10*L, err_sampling: DiscrGaussianSampler::default() };
         test_inputs(gaussian_gsw);
     }
 

@@ -4,6 +4,7 @@ pub mod field;
 pub mod gsw;
 pub mod zo_sss;
 pub mod error_sampling;
+pub mod pow2_ring;
 
 pub struct TfheStructure<S: SecretSharingScheme, E: FheScheme> {
     pub secret_sharing_scheme: S,

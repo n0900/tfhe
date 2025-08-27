@@ -20,16 +20,11 @@ pub fn bit_decomp_matrix(a_matrix: &mut Vec<Vec<Fp>>) {
 
 /// Inverse operation; only supports [u64;1] for now but could be expanded.
 pub fn bit_decomp_inv(bits: &mut Vec<Fp>) {
-    assert!(
-        bits.len() % L == 0,
-        "bit_decomp_inv: input length must be a multiple of L"
-    );
-
     let out_len = bits.len() / L;
     let mut tmp = Vec::with_capacity(out_len);
 
     for chunk in bits.chunks(L) {
-        let mut repr: u64 = 0; // Fp uses [u64; 1] per your comment
+        let mut repr: u64 = 0; // Fp uses [u64; 1]
 
         for (i, bit) in chunk.iter().enumerate() {
             if *bit == Fp::ONE {
@@ -40,7 +35,7 @@ pub fn bit_decomp_inv(bits: &mut Vec<Fp>) {
         tmp.push(Fp::from(repr));
     }
 
-    *bits = tmp; // replace contents — same pattern as your bit_decomp replacement
+    *bits = tmp;
 }
 
 /// "When A is a matrix, let BitDecomp(A), BitDecomp−1 , or Flatten(A) be 
@@ -96,6 +91,36 @@ pub fn mult_matrix_vector_fp(matrix: &Vec<Vec<Fp>>, vector: &Vec<Fp>) -> Vec<Fp>
         })
         .collect()
 }
+
+/// Computes t^T * A where `vector` is t (length = number of rows of matrix).
+/// matrix: m x n (Vec of m rows, each row has n entries)
+/// Returns a Vec<Fp> of length n.
+pub fn mult_vector_matrix_fp(vector: &Vec<Fp>, matrix: &Vec<Vec<Fp>>) -> Vec<Fp> {
+    let rows = matrix.len();
+    assert!(vector.len() == rows, "Vector length must match number of matrix rows");
+
+    // empty matrix -> empty result
+    if rows == 0 {
+        return Vec::new();
+    }
+
+    // ensure all rows have same number of columns
+    let cols = matrix[0].len();
+    assert!(matrix.iter().all(|row| row.len() == cols), "All matrix rows must have same length");
+
+    let mut res = vec![Fp::ZERO; cols];
+
+    // accumulate: for each row i, add t[i] * row_i to result
+    for (t_i, row) in vector.iter().zip(matrix.iter()) {
+        // t_i * row[j] and accumulate in res[j]
+        for (j, a_ij) in row.iter().enumerate() {
+            res[j] = res[j] + (*t_i * *a_ij);
+        }
+    }
+
+    res
+}
+
 
 pub fn add_vec_vec_fp(a: &Vec<Fp>, b: &Vec<Fp>) -> Vec<Fp> {
     assert_eq!(a.len(), b.len());
@@ -154,16 +179,13 @@ mod tests {
     use rand::{Rng};
     use super::*;
 
-
-    // #[cfg(feature = "use_flatten")]
     #[test]
     fn gadget_vector_has_correct_size() {
         assert_eq!(GADGET_VECTOR.len(), Fp::NUM_BITS as usize)
     }
 
-    // #[cfg(feature = "use_flatten")]
     #[test]
-    fn test_bit_decomp_and_inv_for_field() {
+    fn test_bit_decomp_and_inv() {
         for _ in 0..10 {
             let mut rng = rand::rng();
             let input: Vec<Fp> = (0..10).map(|_| Fp::from(rng.random::<u64>())).collect();
@@ -177,6 +199,13 @@ mod tests {
             bit_decomp_inv(&mut reconstructed);
             assert_eq!(reconstructed.len(), input.len());
             assert_eq!(input, reconstructed);
+
+            let matrix = vec![vec![Fp::from(2u64),Fp::from(2u64)],vec![Fp::from(2u64),Fp::from(2u64)]];
+            let mut decomp_matrix = matrix.clone();
+            bit_decomp_matrix(&mut decomp_matrix);
+            assert_ne!(matrix, decomp_matrix);
+            decomp_matrix.iter_mut().for_each(|row| bit_decomp_inv(row));
+            assert_eq!(matrix, decomp_matrix);
         }
     }
 
