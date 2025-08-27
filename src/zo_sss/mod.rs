@@ -15,27 +15,6 @@ pub trait SecretSharingScheme<R:RingElement> {
     fn combine(&self, parties: Vec<Party<R>>, is_minimal: bool) -> Vec<R>;
 }
 
-/// It is the users responsibility to use a correct dimacs!
-/// Only checks for k-out-of-n
-pub struct Shamir {
-    _n: u8,
-    k: u8,
-    dimacs: DIMACS
-}
-
-impl SecretSharingScheme<Fp> for Shamir {
-    fn share(&self, secrets: Vec<Fp>) -> Vec<Party<Fp>> {
-        mbf_share(secrets, &self.dimacs)
-    }
-
-    fn combine(&self, parties: Vec<Party<Fp>>, _is_minimal: bool) -> Vec<Fp> {
-        let subset: Vec<Party<Fp>> = if parties.len() >= (self.k as usize) {
-            parties.iter().take(self.k as usize).cloned().collect()
-        } else { panic!("Invalid party size") };
-        mbf_combine(subset, true, &self.dimacs)
-    }
-}
-
 pub struct MBF {
     dimacs: DIMACS
 }
@@ -52,11 +31,11 @@ impl SecretSharingScheme<Fp> for MBF {
 
 #[cfg(test)]
 mod tests {
-    use crate::{error_sampling::rnd_fp_vec, field::{Fp, P}, zo_sss::{dimacs::{DIMACS, DIMACS_2_OF_3_SCHEME, DIMACS_AB_OR_CD}, SecretSharingScheme, Shamir, MBF}};
+    use crate::{error_sampling::rnd_fp_vec, field::{Fp, P}, zo_sss::{dimacs::{DIMACS, DIMACS_2_OF_3_SCHEME, DIMACS_AB_OR_CD}, SecretSharingScheme, MBF}};
 
     #[test]
     fn shamir_struct_test() {
-        let shamir = Shamir { _n:3, k:2, dimacs: DIMACS::parse(DIMACS_2_OF_3_SCHEME) };
+        let shamir = MBF { dimacs: DIMACS::parse(DIMACS_2_OF_3_SCHEME) };
         sss_test(shamir);
     }
 
