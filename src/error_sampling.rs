@@ -11,8 +11,8 @@ use rand::{distr::Distribution, rng, Rng};
 pub const NOISE_CONST: Lazy<Fp> = Lazy::new(||Fp::from(5));
 pub const NOISE_CONST_INV: Lazy<Fp> = Lazy::new(||Fp::from(5).invert().unwrap());
 
-pub fn rnd_fp_vec(size: usize, min: u64, max: u64) -> Vec<Fp> {
-    (0..size).map(|_| rnd_fp(min, max)).collect()
+pub fn rnd_fp_dvec(size: usize, min: u64, max: u64) -> DVector<Fp> {
+    DVector::from_vec((0..size).map(|_| rnd_fp(min, max)).collect())
 }
 
 pub fn rnd_fp(min: u64, max: u64) -> Fp {

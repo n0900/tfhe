@@ -2,11 +2,30 @@ use std::fmt;
 use std::ops::{Add, Sub, Mul, Neg};
 use std::ops::{AddAssign, SubAssign, MulAssign};
 
+use ff::derive::bitvec::array::BitArray;
+
+use crate::RingElement;
+
 /// Integer ring Z_{2^M} (M is exponent)
 /// Only supports 1 <= M <= 64 so everything fits in `u64`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Zpow2<const M: u64> {
     value: u64,
+}
+
+impl<const M: u64> RingElement for Zpow2<M> {
+    const Num_Bits: usize = M as usize;
+
+    fn to_le_bits(&self) -> BitArray<[u8; 8]> {
+        let mut bit_array = BitArray::<[u8; 8]>::default();
+
+        for i in 0..M {
+            let bit = (self.value() >> i) & 1 == 1;  
+            bit_array.set(i as usize, bit); 
+        }
+
+        bit_array
+    }
 }
 
 impl<const M: u64> Zpow2<M> {

@@ -1,38 +1,41 @@
-use crate::field::{Fp, GADGET_VECTOR, L};
-use ff::{Field, PrimeFieldBits};
+use crate::{field::{Fp}, RingElement};
+use ff::{Field};
+use nalgebra::{DMatrix, DVector};
 
 /// BitDecomp: Expand every Fp entry into bit representation and
 /// output a.len()*L =: N-dim array of Fp::ZERO and Fp::ONE entries.
 /// in little endian.
-pub fn bit_decomp(a: &mut Vec<Fp>) {
-    let mut tmp = Vec::with_capacity(a.len() * L);
+pub fn bit_decomp<T: RingElement>(a: &mut Vec<T>) {
+    let mut tmp = Vec::with_capacity(a.len() * T::Num_Bits);
     for elm in a.drain(..) {
-        tmp.extend(elm.to_le_bits().iter().take(L).map(|b| if *b { Fp::ONE } else { Fp::ZERO }));
+        tmp.extend(elm.to_le_bits().iter().take(T::Num_Bits).map(|b| if *b { T::one() } else { T::zero() }));
     }
     *a = tmp;
 }
 
 /// "When A is a matrix, let BitDecomp(A), BitDecomp−1 , or Flatten(A) be 
 /// the matrix formed by applying the operation to each row of A separately"
-pub fn bit_decomp_matrix(a_matrix: &mut Vec<Vec<Fp>>) {
-    a_matrix.iter_mut().for_each(|row| bit_decomp(row));
+pub fn bit_decomp_matrix<T: RingElement + 'static>(a_matrix: &mut DMatrix<T>) {
+    let mut vec_of_vec = dmatrix_to_vec_of_vecs(a_matrix);
+    vec_of_vec.iter_mut().for_each(|row| bit_decomp(row));
+    *a_matrix = vec_of_vecs_to_dmatrix(vec_of_vec);
 }
 
-/// Inverse operation; only supports [u64;1] for now but could be expanded.
-pub fn bit_decomp_inv(bits: &mut Vec<Fp>) {
-    let out_len = bits.len() / L;
+/// Only supports inverses up to u64!
+pub fn bit_decomp_inv<T: RingElement>(bits: &mut Vec<T>) {
+    let out_len = bits.len() / T::Num_Bits;
     let mut tmp = Vec::with_capacity(out_len);
 
-    for chunk in bits.chunks(L) {
-        let mut repr: u64 = 0; // Fp uses [u64; 1]
+    for chunk in bits.chunks(T::Num_Bits) {
+        let mut repr: u64 = 0;
 
         for (i, bit) in chunk.iter().enumerate() {
-            if *bit == Fp::ONE {
+            if *bit == T::one() {
                 repr |= 1u64 << i;
             }
         }
 
-        tmp.push(Fp::from(repr));
+        tmp.push(T::from(repr));
     }
 
     *bits = tmp;
@@ -40,134 +43,56 @@ pub fn bit_decomp_inv(bits: &mut Vec<Fp>) {
 
 /// "When A is a matrix, let BitDecomp(A), BitDecomp−1 , or Flatten(A) be 
 /// the matrix formed by applying the operation to each row of A separately"
-pub fn bit_decomp_inv_matrix(a_matrix: &mut Vec<Vec<Fp>>) {
-    a_matrix.iter_mut().for_each(|row| bit_decomp_inv(row));
+pub fn bit_decomp_inv_matrix<T: RingElement + 'static>(a_matrix: &mut DMatrix<T>) {
+    let mut vec_of_vec = dmatrix_to_vec_of_vecs(a_matrix);
+    vec_of_vec.iter_mut().for_each(|row| bit_decomp_inv(row));
+    *a_matrix = vec_of_vecs_to_dmatrix(vec_of_vec);
 }
 
-pub fn flatten(bits: &mut Vec<Fp>) {
+pub fn flatten<T: RingElement>(bits: &mut Vec<T>) {
     bit_decomp_inv(bits);
     bit_decomp(bits);
 }
 
 // "When A is a matrix, let BitDecomp(A), BitDecomp−1 , or Flatten(A) be 
 // the matrix formed by applying the operation to each row of A separately" 
-pub fn flatten_matrix(a_matrix: &mut Vec<Vec<Fp>>) {
-    a_matrix.iter_mut().for_each(|a| flatten(a));
+pub fn flatten_matrix<T: RingElement + 'static>(a_matrix: &mut DMatrix<T>) {
+    let mut vec_of_vec = dmatrix_to_vec_of_vecs(a_matrix);
+    vec_of_vec.iter_mut().for_each(|row| flatten(row));
+    *a_matrix = vec_of_vecs_to_dmatrix(vec_of_vec);
 }
 
 /// PowersOf2: (b_1, 2b_1, ..., 2^{l-1}b_1, ..., b_k, ..., 2^{l-1}b_k)
-pub fn powers_of_2(b: &Vec<Fp>) -> Vec<Fp> {
-    let mut out = Vec::with_capacity(b.len() * GADGET_VECTOR.len());
-    for x in b {
-        for g in GADGET_VECTOR.iter() {
-            out.push(*x * *g);
+pub fn powers_of_2<T: RingElement + 'static>(b: &DVector<T>, gadget_vector: &DVector<T>) -> DVector<T> {
+    let mut out = DVector::from_element(b.len() * gadget_vector.len(), T::zero()); // Initialize with zero
+
+    let mut index = 0;
+    for x in b.iter() {
+        for g in gadget_vector.iter() {
+            out[index] = *x * *g;
+            index += 1;
         }
     }
+
     out
 }
 
-pub fn negate_matrix_fp(a: &mut Vec<Vec<Fp>>) {
-    a.iter_mut().for_each(|row|
-        row.iter_mut().for_each(|entry|
-            *entry = -*entry
-        )
-    );
+
+pub fn dmatrix_to_vec_of_vecs<T: RingElement>(matrix: &DMatrix<T>) -> Vec<Vec<T>> {
+    matrix
+        .as_slice()  
+        .chunks(matrix.ncols()) 
+        .map(|chunk| chunk.to_vec()) 
+        .collect()  
 }
 
-// Helper: dot product over field elements
-pub fn dot_product_fp(a: &Vec<Fp>, b: &Vec<Fp>) -> Fp {
-    assert_eq!(a.len(), b.len());
-    a.iter().zip(b.iter()).fold(Fp::ZERO, |acc, (x, y)| acc + (*x * *y))
-}
+pub fn vec_of_vecs_to_dmatrix<T: RingElement + 'static>(vec_of_vecs: Vec<Vec<T>>) -> DMatrix<T> {
+    let nrows = vec_of_vecs.len();
+    let ncols = vec_of_vecs.get(0).map_or(0, |row| row.len()); 
 
-pub fn mult_matrix_vector_fp(matrix: &Vec<Vec<Fp>>, vector: &Vec<Fp>) -> Vec<Fp> {
-    assert!(matrix.iter().all(|row| row.len() == vector.len()), "Matrix column count must match vector length");
+    let flat_vec: Vec<T> = vec_of_vecs.into_iter().flat_map(|row| row.into_iter()).collect();
 
-    matrix.iter()
-        .map(|row| {
-            row.iter()
-                .zip(vector.iter())
-                .fold(Fp::ZERO, |acc, (x, y)| acc + (*x * *y))
-        })
-        .collect()
-}
-
-/// Computes t^T * A where `vector` is t (length = number of rows of matrix).
-/// matrix: m x n (Vec of m rows, each row has n entries)
-/// Returns a Vec<Fp> of length n.
-pub fn mult_vector_matrix_fp(vector: &Vec<Fp>, matrix: &Vec<Vec<Fp>>) -> Vec<Fp> {
-    let rows = matrix.len();
-    assert!(vector.len() == rows, "Vector length must match number of matrix rows");
-
-    // empty matrix -> empty result
-    if rows == 0 {
-        return Vec::new();
-    }
-
-    // ensure all rows have same number of columns
-    let cols = matrix[0].len();
-    assert!(matrix.iter().all(|row| row.len() == cols), "All matrix rows must have same length");
-
-    let mut res = vec![Fp::ZERO; cols];
-
-    // accumulate: for each row i, add t[i] * row_i to result
-    for (t_i, row) in vector.iter().zip(matrix.iter()) {
-        // t_i * row[j] and accumulate in res[j]
-        for (j, a_ij) in row.iter().enumerate() {
-            res[j] = res[j] + (*t_i * *a_ij);
-        }
-    }
-
-    res
-}
-
-
-pub fn add_vec_vec_fp(a: &Vec<Fp>, b: &Vec<Fp>) -> Vec<Fp> {
-    assert_eq!(a.len(), b.len());
-    a.iter().zip(b.iter()).map(|(x, y)| *x + *y).collect()
-}
-
-
-pub fn add_matrix_matrix_fp(a: &Vec<Vec<Fp>>, b: &Vec<Vec<Fp>>) -> Vec<Vec<Fp>> {
-    assert_eq!(a.len(), b.len());
-    a.iter()
-        .zip(b.iter())
-        .map(|(row_a, row_b)| { add_vec_vec_fp(row_a, row_b) })
-        .collect()
-}
-
-pub fn mult_const_vec_fp(a: &mut Vec<Fp>, constant: Fp) {
-    a.iter_mut().for_each(|entry| *entry = *entry * constant);
-}
-
-pub fn mult_const_matrix_fp(a: &mut Vec<Vec<Fp>>, constant: Fp) {
-    a.iter_mut()
-        .for_each(|row| { mult_const_vec_fp(row, constant) });
-}
-
-pub fn mult_matrix_matrix_fp(a: &Vec<Vec<Fp>>, b: &Vec<Vec<Fp>>) -> Vec<Vec<Fp>> {
-    let a_rows = a.len();
-    let a_cols = if a_rows > 0 { a[0].len() } else { 0 };
-    let b_rows = b.len();
-    let b_cols = if b_rows > 0 { b[0].len() } else { 0 };
-
-    assert!(a_cols == b_rows, "Incompatible dimensions: a_cols must equal b_rows");
-
-    (0..a_rows).map(|i| {
-        (0..b_cols).map(|j| {
-            let mut sum = Fp::ZERO;
-            for k in 0..a_cols {
-                sum += a[i][k] * b[k][j];
-            }
-            sum
-        }).collect()
-    }).collect()
-}
-
-//more efficient addition of \mu * I_n
-pub fn add_to_diagonal(a: &mut Vec<Vec<Fp>>, mu: Fp) {
-    a.iter_mut().enumerate().for_each(| (i, row) |
-        row[i] = row[i] + mu );
+    DMatrix::from_vec(nrows, ncols, flat_vec)
 }
 
 
@@ -193,18 +118,18 @@ mod tests {
             let mut decomposed = input.clone();
             bit_decomp(&mut decomposed);
             assert_ne!(decomposed, input);
-            assert_eq!(decomposed.len(), input.len()*L);
+            assert_eq!(decomposed.len(), input.len()*Fp::Num_Bits);
 
             let mut reconstructed = decomposed.clone();
             bit_decomp_inv(&mut reconstructed);
             assert_eq!(reconstructed.len(), input.len());
             assert_eq!(input, reconstructed);
 
-            let matrix = vec![vec![Fp::from(2u64),Fp::from(2u64)],vec![Fp::from(2u64),Fp::from(2u64)]];
+            let matrix = vec_of_vecs_to_dmatrix(vec![vec![Fp::from(2u64),Fp::from(2u64)],vec![Fp::from(2u64),Fp::from(2u64)]]);
             let mut decomp_matrix = matrix.clone();
             bit_decomp_matrix(&mut decomp_matrix);
             assert_ne!(matrix, decomp_matrix);
-            decomp_matrix.iter_mut().for_each(|row| bit_decomp_inv(row));
+            bit_decomp_inv_matrix(&mut decomp_matrix);
             assert_eq!(matrix, decomp_matrix);
         }
     }
@@ -219,10 +144,10 @@ mod tests {
 
             let mut bd_a = a.clone();
             bit_decomp(&mut bd_a);
-            let po2_b = powers_of_2(&b);
+            let po2_b = powers_of_2(&DVector::from_vec(b.clone()), &GADGET_VECTOR);
             assert_eq!(bd_a.len(), po2_b.len(), "Length mismatch in decomp vs powers_of_two.");
 
-            let dot_decomp = dot_product_fp(&bd_a, &po2_b);
+            let dot_decomp = DVector::from_vec(bd_a).dot(&po2_b);
             let dot_ab = dot_product_fp(&a, &b);
 
             assert_eq!(dot_decomp, dot_ab, "Scalar product invariant failed.");

@@ -1,4 +1,6 @@
-use std::marker::PhantomData;
+use std::{marker::PhantomData, ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign}};
+
+use ff::{derive::bitvec::array::BitArray, PrimeField, PrimeFieldBits};
 
 use crate::{error_sampling::ErrorSampling, field::Fp, gsw::{FheScheme, GSW}, pow2_ring::Zpow2, zo_sss::{Party, SecretSharingScheme}};
 
@@ -10,11 +12,16 @@ pub mod pow2_ring;
 pub mod tfhe_gsw_fp;
 
 pub trait RingElement:
-    Clone + Copy + PartialEq + Eq + std::fmt::Debug
-{}
+    Clone + Copy + PartialEq + Eq + std::fmt::Debug 
+    + Add + Sub + Mul + Neg
+    + AddAssign + SubAssign + MulAssign
+    + num_traits::Zero + num_traits::One
+    + From<u64>
+{
+    fn to_le_bits(&self) -> BitArray<[u8;8]>;
+    const Num_Bits: usize;
+}
 
-impl RingElement for Fp {}
-impl<const M: u64> RingElement for Zpow2<M> {}
 
 /// The TFHE scheme is fully described by
 /// the Ring over which it operates,
