@@ -4,7 +4,7 @@ use crate::{error_sampling::ErrorSampling, field::Fp, pow2_ring::Zpow2, RingElem
 
 pub mod sk;
 pub mod pk;
-pub mod gsw;
+pub mod helper;
 pub mod gsw_fp;
 pub mod gsw_zpow2;
 

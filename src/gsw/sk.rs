@@ -2,7 +2,7 @@ use ff::Field;
 use nalgebra::DVector;
 
 use crate::field::{Fp, GADGET_VECTOR};
-use crate::gsw::gsw::powers_of_2;
+use crate::gsw::helper::powers_of_2;
 use crate::gsw::RingElement;
 
 
@@ -17,14 +17,13 @@ pub struct GswSk<R: RingElement> {
 }
 
 impl GswSk<Fp> {
+    pub fn new(t: DVector<Fp>) -> Self {
+        let mut s = DVector::zeros(t.len() + 1);
+        s[0] = Fp::ONE;
 
-pub fn new(t: DVector<Fp>) -> Self {
-    let mut s = DVector::zeros(t.len() + 1);
-    s[0] = Fp::ONE;
+        s.rows_mut(1, t.len()).copy_from(&(-t.clone()));
 
-    s.rows_mut(1, t.len()).copy_from(&(-t.clone()));
-
-    let v = powers_of_2(&s, &GADGET_VECTOR);
-    Self { t, s, v }
-}
+        let v = powers_of_2(&s, &GADGET_VECTOR);
+        Self { t, s, v }
+    }
 }

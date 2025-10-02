@@ -1,7 +1,7 @@
 use crate::{field::{Fp, P}, RingElement};
 
 use ff::Field;
-use nalgebra::{DVector, SVector};
+use nalgebra::{DVector, DMatrix};
 use num_bigint::{BigUint, Sign};
 use num_rational::Ratio;
 use once_cell::sync::Lazy;
@@ -11,8 +11,13 @@ use rand::{distr::Distribution, rng, Rng};
 pub const NOISE_CONST: Lazy<Fp> = Lazy::new(||Fp::from(5));
 pub const NOISE_CONST_INV: Lazy<Fp> = Lazy::new(||Fp::from(5).invert().unwrap());
 
+
+pub fn rnd_fp_dmatrix(nrows: usize, ncols: usize, min: u64, max: u64) -> DMatrix<Fp> {
+    DMatrix::from_fn(nrows, ncols, |_, _| rnd_fp(min, max))
+}
+
 pub fn rnd_fp_dvec(size: usize, min: u64, max: u64) -> DVector<Fp> {
-    DVector::from_vec((0..size).map(|_| rnd_fp(min, max)).collect())
+    DVector::from_fn(size,  |_,_| rnd_fp(min, max))
 }
 
 pub fn rnd_fp(min: u64, max: u64) -> Fp {
@@ -24,7 +29,7 @@ pub fn rnd_fp(min: u64, max: u64) -> Fp {
 // TODO Decide between SVector and DVector
 pub trait ErrorSampling<R: RingElement> {
     fn rnd_fp(&self) -> R;
-    fn rnd_fp_vec(&self, size: usize) -> DVector<R>;
+    fn rnd_fp_dvec(&self, size: usize) -> DVector<R>;
 }
 
 pub struct DiscrGaussianSampler {
@@ -60,7 +65,7 @@ impl ErrorSampling<Fp> for DiscrGaussianSampler {
         }
     } 
 
-    fn rnd_fp_vec(&self, size: usize) -> DVector<Fp> {
+    fn rnd_fp_dvec(&self, size: usize) -> DVector<Fp> {
         DVector::from_iterator(size, (0..size).map(|_| Self::rnd_fp(self)))
     }
 
@@ -70,12 +75,11 @@ pub struct NaiveSampler;
 
 impl ErrorSampling<Fp> for NaiveSampler {
     fn rnd_fp(&self) -> Fp {
-        let mut rng = rng();
-        Fp::from(rng.random_range(0..P/4)) * *NOISE_CONST
+        rnd_fp(0, P/4) * *NOISE_CONST
     }
 
-    fn rnd_fp_vec(&self, size: usize) -> DVector<Fp> {
-        DVector::from_iterator(size, (0..size).map(|_| Self::rnd_fp(self)))
+    fn rnd_fp_dvec(&self, size: usize) -> DVector<Fp> {
+        DVector::from_fn(size,  |_,_| self.rnd_fp())
     }
 }
 
@@ -88,7 +92,7 @@ mod test {
     fn gaussian_test() {
         // check that random numbers are not all equal
         let gaussian = DiscrGaussianSampler::default();
-        let rnd_vec = gaussian.rnd_fp_vec(100);
+        let rnd_vec = gaussian.rnd_fp_dvec(100);
         println!("First 5 samples: {:?}", &rnd_vec.as_slice()[..5]);
 
         assert_eq!(rnd_vec.len(), 100);

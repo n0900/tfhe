@@ -1,24 +1,21 @@
 
-// use ff::{Field, PrimeFieldBits};
+// use ff::{Field};
+// use nalgebra::{DMatrix, DVector};
 
 // use crate::{
-//     error_sampling::{rnd_fp_dvec, ErrorSampling}, field::{Fp, P}, gsw::{gsw::{
-//         add_matrix_matrix_fp, add_to_diagonal, bit_decomp_matrix, dot_product_fp, flatten_matrix, mult_const_matrix_fp, mult_matrix_matrix_fp, mult_matrix_vector_fp, negate_matrix_fp
-//     }, pk::GswPk, sk::GswSk, FheScheme, GSW}
+//     error_sampling::{rnd_fp_dmatrix, rnd_fp_dvec, ErrorSampling}, field::{Fp, P}, gsw::{helper::bit_decomp_matrix, pk::GswPk, sk::GswSk, FheScheme, GSW}
 // };
 
 // impl<T: ErrorSampling<Fp>> FheScheme<Fp> for GSW<Fp, T> {
 //     type SecretKey = GswSk<Fp>;
 //     type PublicKey = GswPk;
-//     type Ciphertext = Vec<Vec<Fp>>;
+//     type Ciphertext = DMatrix<Fp>;
 
 //     fn keygen(&self) -> (Self::SecretKey, Self::PublicKey) {
 //         let sk = GswSk::new(rnd_fp_dvec(self.n as usize, 0, P-1));  
           
-//         let err: Vec<Fp> = self.err_sampling.rnd_fp_vec(self.m as usize).iter().map(|x| *x).collect();    
-//         let random_matrix: Vec<Vec<Fp>> = (0..err.len())
-//             .map(|_| rnd_fp_dvec(self.n as usize, 0, P-1))
-//             .collect();
+//         let err: DVector<Fp> = self.err_sampling.rnd_fp_dvec(self.m as usize);    
+//         let random_matrix: DMatrix<Fp> = rnd_fp_dmatrix(self.m, self.n, 0, 1);
         
 //         let pk = GswPk::new(&random_matrix, &err, &sk.t);
 //         (sk, pk)   
@@ -30,13 +27,17 @@
 //         #[cfg(not(feature="use_flatten"))]
 //         let big_n: usize = (self.n + 1) as usize;
 
-//         let random_matrix = (0..big_n).map(|_| rnd_fp_dvec(self.m as usize, 0, 1)).collect();
-//         let mut product = mult_matrix_matrix_fp(&random_matrix, &pk.pk_matrix);
+//         //(0..big_n).map(|_| rnd_fp_dvec(self.m as usize, 0, 1)).collect();
+//         let random_matrix = rnd_fp_dmatrix(big_n, self.m, 0, 1);
+//         let mut product = &random_matrix * &pk.pk_matrix;
 
 //         #[cfg(feature="use_flatten")]
 //         bit_decomp_matrix(&mut product);
 
-//         add_to_diagonal(&mut product,message);
+//         //Add message to diagonal (matrix is square)
+//         for i in 0..product.ncols() {
+//             product[(i, i)] += message;
+//         }
 
 //         #[cfg(feature="use_flatten")]
 //         flatten_matrix(&mut product);
@@ -46,7 +47,10 @@
 
 //     fn decrypt(&self, sk: &Self::SecretKey, ciphertext: &Self::Ciphertext) -> Fp {
 //         let i = 64 - (P / 3).leading_zeros() as usize; //efficient log2(P/3) (only for u64!)
+        
+//         // TODO This invert is bad bc we do not operate over field. Boneh has better solution
 //         let v_i = sk.v[i].invert().unwrap();
+        
 //         // Bit Decomp is only necessary if its deactivated in cfg!
 //         #[cfg(feature="use_flatten")]
 //         {
@@ -55,10 +59,10 @@
 //         #[cfg(not(feature="use_flatten"))]
 //         {
 //             let mut flattened_ct = ciphertext.clone();
-//             // bit_decomp_matrix(&mut flattened_ct);
-//             flatten_matrix( &mut flattened_ct);
-//             let testier = &flattened_ct[i];
-//             let test = dot_product_fp(testier, &sk.v);
+//             bit_decomp_matrix(&mut flattened_ct);
+//             // flatten_matrix(&mut flattened_ct);
+//             let testier = &flattened_ct.row(i);
+//             let test = testier.dot(&sk.v);
 //             test * v_i
 //         }
 //     }
@@ -83,9 +87,9 @@
 
 //     // flatten(C1+C2)
 //     fn add(&self, ciphertext1: &Self::Ciphertext, cipertext2: &Self::Ciphertext) -> Self::Ciphertext {
-//         assert_eq!(ciphertext1.len(), cipertext2.len(), "Cannot add Ciphertexts because they are different sizes");
-//         assert_eq!(ciphertext1.first().unwrap().len(), cipertext2.first().unwrap().len(), "Cannot add Ciphertexts because they are different sizes");
-//         let mut res = add_matrix_matrix_fp(ciphertext1, cipertext2);
+//         assert_eq!(ciphertext1.nrows(), cipertext2.nrows(), "Cannot add Ciphertexts because they are different sizes");
+//         assert_eq!(ciphertext1.ncols(), cipertext2.ncols(), "Cannot add Ciphertexts because they are different sizes");
+//         let mut res = ciphertext1 + cipertext2;
 //         #[cfg(feature="use_flatten")]
 //         flatten_matrix(&mut res);
 //         res
@@ -93,16 +97,16 @@
 
 //     // flatten(C*a)
 //     fn mult_const(&self, ciphertext: &mut Self::Ciphertext, constant: Fp) {
-//         mult_const_matrix_fp(ciphertext, constant);
+//         *ciphertext *= constant;
 //         #[cfg(feature="use_flatten")]
 //         flatten_matrix(ciphertext);
 //     }
 
 //     // flatten(C1*C2)
 //     fn mult(&self, ciphertext1: &Self::Ciphertext, cipertext2: &Self::Ciphertext) -> Self::Ciphertext {
-//         assert_eq!(ciphertext1.len(), cipertext2.len(), "Cannot mult Ciphertexts because they are different sizes");
-//         assert_eq!(ciphertext1.first().unwrap().len(), cipertext2.first().unwrap().len(), "Cannot mult Ciphertexts because they are different sizes");
-//         let mut res = mult_matrix_matrix_fp(ciphertext1, cipertext2);
+//         assert_eq!(ciphertext1.nrows(), cipertext2.nrows(), "Cannot add Ciphertexts because they are different sizes");
+//         assert_eq!(ciphertext1.ncols(), cipertext2.ncols(), "Cannot add Ciphertexts because they are different sizes");
+//         let mut res = ciphertext1 * cipertext2;
 //         #[cfg(feature="use_flatten")]
 //         flatten_matrix(&mut res);
 //         res
@@ -110,9 +114,13 @@
 
 //     // flatten(I - C1*C2)
 //     fn nand(&self, ciphertext1: &Self::Ciphertext, cipertext2: &Self::Ciphertext) -> Self::Ciphertext {
-//         let mut prod = mult_matrix_matrix_fp(ciphertext1, cipertext2);
-//         negate_matrix_fp(&mut prod);
-//         add_to_diagonal(&mut prod, Fp::ONE);
+//         let mut prod = ciphertext1 * cipertext2;
+//         // negate_matrix_fp(&mut prod);
+//         prod.neg_mut();
+//         // add_to_diagonal(&mut prod, Fp::ONE);
+//         for i in 0..prod.ncols() {
+//             prod[(i, i)] += Fp::ONE;
+//         } 
 //         #[cfg(feature="use_flatten")]
 //         flatten_matrix(&mut prod);
 //         prod
@@ -124,18 +132,17 @@
 // mod tests {
 //     use std::marker::PhantomData;
 
-//     use ff::PrimeField;
 //     use ff::{Field};
 //     use rand::Rng;
 
+//     use crate::error_sampling::rnd_fp_dmatrix;
 //     use crate::error_sampling::rnd_fp_dvec;
 //     use crate::error_sampling::DiscrGaussianSampler;
 //     use crate::error_sampling::NaiveSampler;
 //     use crate::field::Fp;
 //     use crate::field::P;
-//     use crate::gsw::FheScheme;
-//     use crate::gsw::gsw::{mult_matrix_vector_fp};
 //     use crate::gsw::pk::GswPk;
+//     use crate::gsw::FheScheme;
 //     use crate::gsw::sk::GswSk;
 //     use crate::gsw::GSW;
 //     use crate::RingElement;
@@ -147,9 +154,10 @@
 
 //         let sk = GswSk::new(rnd_fp_dvec(n, 0, P-1));
 //         let err = rnd_fp_dvec(m, 0, P/2);
-//         let random_matrix: Vec<Vec<Fp>> = (0..err.len()).map(|_| rnd_fp_dvec(n, 0, P-1)).collect();
+//         // let random_matrix: Vec<Vec<Fp>> = (0..err.len()).map(|_| rnd_fp_dvec(n, 0, P-1)).collect();
+//         let random_matrix = rnd_fp_dmatrix(err.len(), n, 0, P-1);
 //         let pk = GswPk::new(&random_matrix, &err, &sk.t);
-//         let invariant = mult_matrix_vector_fp(&pk.pk_matrix, &sk.s);
+//         let invariant = &pk.pk_matrix * &sk.s;
 
 //         // As = e
 //         assert_eq!(invariant, err);
