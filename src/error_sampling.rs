@@ -75,7 +75,7 @@ pub struct NaiveSampler;
 impl<R: RingElement + 'static> ErrorSampling<R> for NaiveSampler {
     fn rnd_error_elm(&self) -> R {
         let noise_const = R::from(NOISE_CONST);
-        rnd_ring_elm::<R>(0, P/4) * noise_const
+        rnd_ring_elm::<R>(0, P>>15) * noise_const
     }
 
     fn rnd_error_dvec(&self, size: usize) -> DVector<R> {

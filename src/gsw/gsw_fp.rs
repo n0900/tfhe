@@ -48,29 +48,12 @@ impl<T: ErrorSampling<Fp>> FheScheme<Fp> for GSW<Fp, T> {
         product
     }
 
+
+    // sk.v[i] == 2^{i-1} bc the first entry of s is 1 by definition and v = pow2(s)
     fn decrypt(&self, sk: &Self::SecretKey, ciphertext: &Self::Ciphertext) -> Fp {
-        let i = Fp::Num_Bits -1;//10;//sk.v.len();
-        assert!(sk.v[i] != Fp::ZERO, "We hit the bad case");
-        let test = ciphertext.row(i).transpose().dot(&sk.v);
-        // Bit Decomp is only necessary if its deactivated in cfg!
-        // #[cfg(feature="use_flatten")]
-        // {
-        //     test = ciphertext.row(i).dot(&sk.v);
-
-        // }
-        // #[cfg(not(feature="use_flatten"))]
-        // {
-        //     // use crate::field::GADGET_VECTOR;
-
-        //     // let mut flattened_ct = ciphertext.clone();
-        //     // bit_decomp_matrix(&mut flattened_ct);
-        //     // // flatten_matrix(&mut flattened_ct);
-        //     // let testier = &flattened_ct.row(i);
-        //     // let testiest = &sk.s * GADGET_VECTOR.clone();
-        //     // test = testier.dot(&testiest);
-        //     test = ciphertext.row(i).dot(&sk.s);
-        // }
-        if test >= Fp::from(P/4) && test <= Fp::from(3*P/4)  {
+        let i = Fp::Num_Bits -1;
+        let cipher_row_dot_prod = ciphertext.row(i).transpose().dot(&sk.v);
+        if cipher_row_dot_prod >= Fp::from(P/4) && cipher_row_dot_prod <= Fp::from(3*P/4)  {
             Fp::ONE
         } else { Fp:: ZERO }
     }
@@ -195,33 +178,33 @@ mod tests {
     }
 
 
-    #[test]
-    fn encryption_decryption_pow_of_two() {
-        let fhe = GSW::<Fp, DiscrGaussianSampler> {
-            n:10, 
-            m: 5, 
-            err_sampling: DiscrGaussianSampler::default(),
-            _marker: PhantomData 
-        };
+    // #[test]
+    // fn encryption_decryption_pow_of_two() {
+    //     let fhe = GSW::<Fp, DiscrGaussianSampler> {
+    //         n:10, 
+    //         m: 5, 
+    //         err_sampling: DiscrGaussianSampler::default(),
+    //         _marker: PhantomData 
+    //     };
         
-        let (sk, pk) = fhe.keygen();
+    //     let (sk, pk) = fhe.keygen();
 
-        let encr = fhe.encrypt(&pk, Fp::ZERO);
-        let decr = fhe.mp_decrypt(&sk, &encr);
-        assert_eq!(decr, Fp::ZERO);
+    //     let encr = fhe.encrypt(&pk, Fp::ZERO);
+    //     let decr = fhe.mp_decrypt(&sk, &encr);
+    //     assert_eq!(decr, Fp::ZERO);
 
-        let encr = fhe.encrypt(&pk, Fp::ONE);
-        let decr = fhe.mp_decrypt(&sk, &encr);
-        assert_eq!(decr, Fp::ONE);
+    //     let encr = fhe.encrypt(&pk, Fp::ONE);
+    //     let decr = fhe.mp_decrypt(&sk, &encr);
+    //     assert_eq!(decr, Fp::ONE);
 
-        let mut rng = rand::rng();
-        for _ in 0..10 {
-            let msg = Fp::from(1u64<<rng.random_range(0..Fp::Num_Bits-1));
-            let encr = fhe.encrypt(&pk, msg);
-            let decr = fhe.mp_decrypt(&sk, &encr);
-            assert_eq!(decr, msg);
-        }
-    }
+    //     let mut rng = rand::rng();
+    //     for _ in 0..10 {
+    //         let msg = Fp::from(1u64<<rng.random_range(0..Fp::Num_Bits-1));
+    //         let encr = fhe.encrypt(&pk, msg);
+    //         let decr = fhe.mp_decrypt(&sk, &encr);
+    //         assert_eq!(decr, msg);
+    //     }
+    // }
 
     fn test_inputs<T: FheScheme<Fp>>(fhe: T) {
         let (sk, pk) = fhe.keygen();

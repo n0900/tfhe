@@ -27,3 +27,19 @@ impl GswSk<Fp> {
         Self { t, s, v }
     }
 }
+
+
+
+#[cfg(test)]
+mod tests {
+    use crate::{error_sampling::rnd_dvec, field::Fp, gsw::sk::GswSk, RingElement};
+
+    #[test]
+    fn test_v_decomp() {
+        let sk = GswSk::new(rnd_dvec(5, 0, 10));
+
+        for i in 0..Fp::Num_Bits {
+            assert_eq!(sk.v[i], Fp::from(1<<i));
+        }
+    }
+}

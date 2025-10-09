@@ -38,7 +38,7 @@ impl RingElement for Fp {
 
 #[cfg(test)]
 mod tests {
-    use ff::{Field};
+    use ff::{Field, PrimeFieldBits};
     use nalgebra::{DMatrix, DVector};
     use crate::{error_sampling::rnd_ring_elm, field::{Fp, P}};
 
@@ -53,6 +53,16 @@ mod tests {
             let rnd = rnd_ring_elm::<Fp>(1, P-1);
             let inverse = rnd.invert().unwrap();
             assert_eq!(rnd * inverse, Fp::ONE);
+        }
+    }
+
+    #[test]
+    fn test_fp_to_u64() {
+        for _ in 1..100 {
+            let rnd: Fp = rnd_ring_elm(0, P-1);
+            let rnd_u64 = u64::from_le_bytes(rnd.to_le_bits().data);
+            let rnd_reconstr = Fp::from(rnd_u64);
+            assert_eq!(rnd, rnd_reconstr);
         }
     }
 
