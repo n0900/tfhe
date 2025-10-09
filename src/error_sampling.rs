@@ -6,7 +6,7 @@ use num_rational::Ratio;
 use prio::dp::distributions::DiscreteGaussian;
 use rand::{distr::Distribution, rng, Rng};
 
-const NOISE_CONST: u64 = 5u64;
+const NOISE_CONST: u64 = 1u64;
 
 
 pub fn rnd_dmatrix<R: RingElement + 'static>(nrows: usize, ncols: usize, min: u64, max: u64) -> DMatrix<R> {

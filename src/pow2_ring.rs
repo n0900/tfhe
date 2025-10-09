@@ -1,14 +1,16 @@
 use std::fmt;
+use std::iter::Sum;
 use std::ops::{Add, Sub, Mul, Neg};
 use std::ops::{AddAssign, SubAssign, MulAssign};
 
 use ff::derive::bitvec::array::BitArray;
+use num_traits::Zero;
 
 use crate::RingElement;
 
 /// Integer ring Z_{2^M} (M is exponent)
 /// Only supports 1 <= M <= 64 so everything fits in `u64`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Zpow2<const M: u64> {
     value: u64,
 }
@@ -142,6 +144,22 @@ impl<const M: u64> From<u64> for Zpow2<M> {
 impl<const M: u64> fmt::Display for Zpow2<M> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.value)
+    }
+}
+
+// Allow summing an iterator of &'a Zpow2<M> into a Zpow2<M>.
+// The `'a` is a generic lifetime so this impl applies for any lifetime.
+impl<'a, const M: u64> Sum<&'a Zpow2<M>> for Zpow2<M> {
+    fn sum<I: Iterator<Item = &'a Zpow2<M>>>(iter: I) -> Self {
+        // start from zero and add each referenced element
+        iter.fold(Zpow2::zero(), |acc, x| acc + *x)
+    }
+}
+
+// Also implement Sum for owned values (Iterator<Item = Zpow2<M>>).
+impl<const M: u64> Sum<Zpow2<M>> for Zpow2<M> {
+    fn sum<I: Iterator<Item = Zpow2<M>>>(iter: I) -> Self {
+        iter.fold(Zpow2::zero(), |acc, x| acc + x)
     }
 }
 

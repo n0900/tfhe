@@ -1,19 +1,19 @@
 use std::collections::HashSet;
 
-use crate::{error_sampling::rnd_ring_elm, field::{Fp, P}, zo_sss::{dimacs::DIMACS, Party}};
+use crate::{error_sampling::rnd_ring_elm, field::{Fp, P}, zo_sss::{dimacs::DIMACS, Party}, RingElement};
 
 /// Secret Sharing via Monotone Boolean Formula Access Structure
 /// Access Structure is fully defined via DIMACS.
 /// # Parameters
 /// - `secrets`: A set of secrets in Fp.
 /// - `dimacs`: The monotone boolean formula (MBF) defining the access structure.
-pub fn mbf_share(secrets: Vec<Fp>, dimacs: &DIMACS) -> Vec<Party<Fp>> {
+pub fn mbf_share<R: RingElement>(secrets: Vec<R>, dimacs: &DIMACS) -> Vec<Party<R>> {
     let num = dimacs.num_clauses as usize;
-    let w_matrix: Vec<Vec<Fp>> = build_w_matrix(secrets, num);
+    let w_matrix: Vec<Vec<R>> = build_w_matrix(secrets, num);
     get_parties(w_matrix, dimacs)
 }
 
-fn get_parties(w_matrix: Vec<Vec<Fp>>, dimacs: &DIMACS) -> Vec<Party<Fp>> {
+fn get_parties<R: RingElement>(w_matrix: Vec<Vec<R>>, dimacs: &DIMACS) -> Vec<Party<R>> {
     dimacs.partitions
         .iter()
         .enumerate()
@@ -27,7 +27,7 @@ fn get_parties(w_matrix: Vec<Vec<Fp>>, dimacs: &DIMACS) -> Vec<Party<Fp>> {
         .collect()
 }
 
-fn build_w_matrix(secrets: Vec<Fp>, num: usize) -> Vec<Vec<Fp>> {
+fn build_w_matrix<R: RingElement>(secrets: Vec<R>, num: usize) -> Vec<Vec<R>> {
     secrets
         .into_iter()
         .map(|secret| {
@@ -64,9 +64,9 @@ fn build_w_matrix(secrets: Vec<Fp>, num: usize) -> Vec<Vec<Fp>> {
 /// ...
 /// This allows us to never having to calculate the full matrix
 /// or secret||random vector.
-fn build_w(secret: Fp, num: usize) -> Vec<Fp> {
+fn build_w<R: RingElement>(secret: R, num: usize) -> Vec<R> {
     let mut v1 = secret;
-    let mut v2: Fp = rnd_ring_elm(0, P - 1);
+    let mut v2: R = rnd_ring_elm(0, P - 1);
     let mut w = Vec::with_capacity(num);
 
     for _ in 0..num - 1 {
@@ -87,8 +87,8 @@ fn build_w(secret: Fp, num: usize) -> Vec<Fp> {
 /// - `index`: Indicates which secret to reconstruct.
 /// - `is_minimal`: If `true`, skips computing the minimal subset.
 /// - `dimacs`: The monotone boolean formula (MBF) defining the access structure.
-pub fn mbf_combine(parties: Vec<Party<Fp>>, is_minimal: bool, dimacs: &DIMACS) -> Vec<Fp> {
-    let min_set: Vec<Party<Fp>> = if !is_minimal {
+pub fn mbf_combine<R: RingElement>(parties: Vec<Party<R>>, is_minimal: bool, dimacs: &DIMACS) -> Vec<R> {
+    let min_set: Vec<Party<R>> = if !is_minimal {
         get_min_party(&parties, dimacs)
     } else { parties };
 
@@ -98,15 +98,15 @@ pub fn mbf_combine(parties: Vec<Party<Fp>>, is_minimal: bool, dimacs: &DIMACS) -
         .collect()
 }
 
-pub fn get_min_party(parties: &Vec<Party<Fp>>, dimacs: &DIMACS) -> Vec<Party<Fp>> {
+pub fn get_min_party<R: RingElement>(parties: &Vec<Party<R>>, dimacs: &DIMACS) -> Vec<Party<R>> {
     let min_set_names: HashSet<u8> = find_min_sat(parties.iter().map(|p| p.name as u8).collect(), dimacs).unwrap();
     get_parties_by_name(&parties, &min_set_names)
 }
 
 // Cannot use HashSet<Fp> bc Fp does not implement Hash
 // -> manual deduplication
-fn get_party_shares(parties: &Vec<Party<Fp>>, index: usize) -> Vec<Fp> {
-    let mut all_shares: Vec<Fp> = parties.iter()
+fn get_party_shares<R: RingElement>(parties: &Vec<Party<R>>, index: usize) -> Vec<R> {
+    let mut all_shares: Vec<R> = parties.iter()
         .flat_map(|p| p.shares[index].iter().cloned())
         .collect();
 
@@ -115,7 +115,7 @@ fn get_party_shares(parties: &Vec<Party<Fp>>, index: usize) -> Vec<Fp> {
     all_shares
 }
 
-fn get_parties_by_name(parties: &Vec<Party<Fp>>, names: &HashSet<u8>) -> Vec<Party<Fp>> {
+fn get_parties_by_name<R: RingElement>(parties: &Vec<Party<R>>, names: &HashSet<u8>) -> Vec<Party<R>> {
     parties
         .iter()
         .filter(|p| names.contains(&(p.name as u8)))
@@ -156,11 +156,11 @@ fn check_sat(parties: &HashSet<u8>, dimacs: &DIMACS) -> bool {
 #[cfg(test)]
 mod tests {
 
-    use crate::{error_sampling::rnd_ring_elm, field::{Fp, P}, zo_sss::{dimacs::{DIMACS, DIMACS_2_OF_3_SCHEME, DIMACS_AB_OR_CD}, mbf::{get_min_party, mbf_combine, mbf_share}}};
+    use crate::{error_sampling::rnd_ring_elm, field::{Fp, P}, pow2_ring::Zpow2, zo_sss::{dimacs::{DIMACS, DIMACS_2_OF_3_SCHEME, DIMACS_AB_OR_CD}, mbf::{get_min_party, mbf_combine, mbf_share}}, RingElement};
 
     #[test]
     fn share_test_two_of_three() {
-        let secret = rnd_ring_elm(0, P-1);
+        let secret: Fp = rnd_ring_elm(0, P-1);
         let dimacs = DIMACS::parse(DIMACS_2_OF_3_SCHEME);
         let parties = mbf_share(vec![secret], &dimacs);
         assert_eq!(parties.len(), 3);
@@ -171,7 +171,7 @@ mod tests {
 
     #[test]
     fn share_test_ab_or_cd() {
-        let secret = rnd_ring_elm(0, P-1);
+        let secret: Zpow2<32> = rnd_ring_elm(0, P-1);
         let dimacs = DIMACS::parse(DIMACS_AB_OR_CD);
         let parties = mbf_share(vec![secret], &dimacs);
         assert_eq!(parties.len(), 4);
@@ -182,19 +182,19 @@ mod tests {
 
     #[test]
     fn secret_sharing_2_of_3_test(){
-        let secret = rnd_ring_elm(0, P-1);
+        let secret: Fp = rnd_ring_elm(0, P-1);
         let dimacs = DIMACS::parse(DIMACS_2_OF_3_SCHEME);
         execute_mbf_test(secret, &dimacs);
     }
 
     #[test]
     fn secret_sharing_ab_cd_test(){
-        let secret = rnd_ring_elm(0, P-1);
+        let secret: Zpow2<32> = rnd_ring_elm(0, P-1);
         let dimacs = DIMACS::parse(DIMACS_AB_OR_CD);
         execute_mbf_test(secret, &dimacs);
     }
 
-    fn execute_mbf_test(secret: Fp, dimacs: &DIMACS) {
+    fn execute_mbf_test<R: RingElement>(secret: R, dimacs: &DIMACS) {
         let parties = mbf_share(vec![secret], &dimacs);
         let subset = get_min_party(&parties, &dimacs);
         assert_eq!(subset.len(), 2);
