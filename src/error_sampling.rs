@@ -1,35 +1,32 @@
-use crate::{field::{Fp, P}, RingElement};
+use crate::{field::P, RingElement};
 
-use ff::Field;
 use nalgebra::{DVector, DMatrix};
 use num_bigint::{BigUint, Sign};
 use num_rational::Ratio;
-use once_cell::sync::Lazy;
 use prio::dp::distributions::DiscreteGaussian;
 use rand::{distr::Distribution, rng, Rng};
 
-pub const NOISE_CONST: Lazy<Fp> = Lazy::new(||Fp::from(5));
-pub const NOISE_CONST_INV: Lazy<Fp> = Lazy::new(||Fp::from(5).invert().unwrap());
+const NOISE_CONST: u64 = 5u64;
 
 
-pub fn rnd_fp_dmatrix(nrows: usize, ncols: usize, min: u64, max: u64) -> DMatrix<Fp> {
-    DMatrix::from_fn(nrows, ncols, |_, _| rnd_fp(min, max))
+pub fn rnd_dmatrix<R: RingElement + 'static>(nrows: usize, ncols: usize, min: u64, max: u64) -> DMatrix<R> {
+    DMatrix::from_fn(nrows, ncols, |_, _| rnd_ring_elm(min, max))
 }
 
-pub fn rnd_fp_dvec(size: usize, min: u64, max: u64) -> DVector<Fp> {
-    DVector::from_fn(size,  |_,_| rnd_fp(min, max))
+pub fn rnd_dvec<R: RingElement + 'static>(size: usize, min: u64, max: u64) -> DVector<R> {
+    DVector::from_fn(size,  |_,_| rnd_ring_elm(min, max))
 }
 
-pub fn rnd_fp(min: u64, max: u64) -> Fp {
+pub fn rnd_ring_elm<R: RingElement>(min: u64, max: u64) -> R {
     assert!(max <= P);
     let mut rng = rand::rng();
-    Fp::from(rng.random_range(min..=max))
+    R::from(rng.random_range(min..=max))
 }
 
-// TODO Decide between SVector and DVector
+//Do not use for sampling random numbers as domain of error functions is restricted!
 pub trait ErrorSampling<R: RingElement> {
-    fn rnd_fp(&self) -> R;
-    fn rnd_fp_dvec(&self, size: usize) -> DVector<R>;
+    fn rnd_error_elm(&self) -> R;
+    fn rnd_error_dvec(&self, size: usize) -> DVector<R>;
 }
 
 pub struct DiscrGaussianSampler {
@@ -52,47 +49,52 @@ impl DiscrGaussianSampler {
     }
 }
 
-impl ErrorSampling<Fp> for DiscrGaussianSampler {
-    fn rnd_fp(&self) -> Fp {
+impl<R: RingElement+ 'static> ErrorSampling<R> for DiscrGaussianSampler {
+    fn rnd_error_elm(&self) -> R {
         let mut rng = rng();
         let (sign, digits) = self.sampler.sample(&mut rng).to_u64_digits();
+        let noise_const = R::from(NOISE_CONST);
+
         assert!(digits.len()<=1);
         
         match sign {
-            Sign::Minus => -Fp::from(*digits.first().unwrap()) * *NOISE_CONST,
-            Sign::NoSign => Fp::ZERO,
-            Sign::Plus => Fp::from(*digits.first().unwrap()) * *NOISE_CONST,
+            Sign::Minus => -(R::from(*digits.first().unwrap()) * noise_const),
+            Sign::NoSign => R::zero(),
+            Sign::Plus => R::from(*digits.first().unwrap()) * noise_const,
         }
     } 
 
-    fn rnd_fp_dvec(&self, size: usize) -> DVector<Fp> {
-        DVector::from_iterator(size, (0..size).map(|_| Self::rnd_fp(self)))
+    fn rnd_error_dvec(&self, size: usize) -> DVector<R> {
+        DVector::from_iterator(size, (0..size).map(|_| Self::rnd_error_elm(self)))
     }
 
 }
 
 pub struct NaiveSampler;
 
-impl ErrorSampling<Fp> for NaiveSampler {
-    fn rnd_fp(&self) -> Fp {
-        rnd_fp(0, P/4) * *NOISE_CONST
+impl<R: RingElement + 'static> ErrorSampling<R> for NaiveSampler {
+    fn rnd_error_elm(&self) -> R {
+        let noise_const = R::from(NOISE_CONST);
+        rnd_ring_elm::<R>(0, P/4) * noise_const
     }
 
-    fn rnd_fp_dvec(&self, size: usize) -> DVector<Fp> {
-        DVector::from_fn(size,  |_,_| self.rnd_fp())
+    fn rnd_error_dvec(&self, size: usize) -> DVector<R> {
+        DVector::from_fn(size,  |_,_| self.rnd_error_elm())
     }
 }
 
 #[cfg(test)]
 mod test {
 
-    use crate::{error_sampling::{DiscrGaussianSampler, ErrorSampling}};
+    use nalgebra::DVector;
+
+    use crate::{error_sampling::{DiscrGaussianSampler, ErrorSampling}, field::Fp};
 
     #[test]
     fn gaussian_test() {
         // check that random numbers are not all equal
         let gaussian = DiscrGaussianSampler::default();
-        let rnd_vec = gaussian.rnd_fp_dvec(100);
+        let rnd_vec: DVector<Fp> = gaussian.rnd_error_dvec(100);
         println!("First 5 samples: {:?}", &rnd_vec.as_slice()[..5]);
 
         assert_eq!(rnd_vec.len(), 100);

@@ -2,7 +2,7 @@ use ff::{Field, PrimeField};
 use nalgebra::{DMatrix, DVector};
 
 use crate::{
-    error_sampling::{rnd_fp_dmatrix, rnd_fp_dvec, ErrorSampling}, field::{Fp, P}, gsw::{helper::{bit_decomp_inv_matrix, bit_decomp_matrix, flatten_matrix}, pk::GswPk, sk::GswSk, FheScheme, GSW}, RingElement
+    error_sampling::{rnd_dmatrix, rnd_dvec, ErrorSampling}, field::{Fp, P}, gsw::{helper::{bit_decomp_inv_matrix, bit_decomp_matrix, flatten_matrix}, pk::GswPk, sk::GswSk, FheScheme, GSW}, RingElement
 };
 
 impl<T: ErrorSampling<Fp>> FheScheme<Fp> for GSW<Fp, T> {
@@ -11,10 +11,10 @@ impl<T: ErrorSampling<Fp>> FheScheme<Fp> for GSW<Fp, T> {
     type Ciphertext = DMatrix<Fp>;
 
     fn keygen(&self) -> (Self::SecretKey, Self::PublicKey) {
-        let sk = GswSk::new(rnd_fp_dvec(self.n as usize, 0, P-1));  
+        let sk = GswSk::new(rnd_dvec(self.n as usize, 0, P-1));  
           
-        let err: DVector<Fp> = self.err_sampling.rnd_fp_dvec(self.m as usize);    
-        let random_matrix: DMatrix<Fp> = rnd_fp_dmatrix(self.m, self.n, 0, P-1);
+        let err: DVector<Fp> = self.err_sampling.rnd_error_dvec(self.m as usize);    
+        let random_matrix: DMatrix<Fp> = rnd_dmatrix(self.m, self.n, 0, P-1);
         
         let pk = GswPk::new(&random_matrix, &err, &sk.t);
         (sk, pk)   
@@ -27,7 +27,7 @@ impl<T: ErrorSampling<Fp>> FheScheme<Fp> for GSW<Fp, T> {
         // let big_n: usize = (self.n + 1) as usize;
 
         //(0..big_n).map(|_| rnd_fp_dvec(self.m as usize, 0, 1)).collect();
-        let random_matrix = rnd_fp_dmatrix(big_n, self.m, 0, 1);
+        let random_matrix = rnd_dmatrix(big_n, self.m, 0, 1);
         let mut product = &random_matrix * &pk.pk_matrix;
         bit_decomp_matrix(&mut product);
         // Add message to diagonal (matrix is square)
@@ -143,8 +143,8 @@ mod tests {
     use ff::{Field};
     use rand::Rng;
 
-    use crate::error_sampling::rnd_fp_dmatrix;
-    use crate::error_sampling::rnd_fp_dvec;
+    use crate::error_sampling::rnd_dmatrix;
+    use crate::error_sampling::rnd_dvec;
     use crate::error_sampling::DiscrGaussianSampler;
     use crate::error_sampling::NaiveSampler;
     use crate::field::Fp;
@@ -160,10 +160,10 @@ mod tests {
         let n = 10;
         let m = 5;
 
-        let sk = GswSk::new(rnd_fp_dvec(n, 0, P-1));
-        let err = rnd_fp_dvec(m, 0, P/2);
+        let sk = GswSk::new(rnd_dvec(n, 0, P-1));
+        let err = rnd_dvec(m, 0, P/2);
         // let random_matrix: Vec<Vec<Fp>> = (0..err.len()).map(|_| rnd_fp_dvec(n, 0, P-1)).collect();
-        let random_matrix = rnd_fp_dmatrix(err.len(), n, 0, P-1);
+        let random_matrix = rnd_dmatrix(err.len(), n, 0, P-1);
         let pk = GswPk::new(&random_matrix, &err, &sk.t);
         let invariant = &pk.pk_matrix * &sk.s;
 

@@ -13,7 +13,8 @@ pub mod tfhe_gsw_fp;
 
 pub trait RingElement:
     Clone + Copy + PartialEq + Eq + std::fmt::Debug 
-    + Add + Sub + Mul + Neg
+    + Add<Output = Self> + Sub<Output = Self>
+    + Mul<Output = Self> + Neg<Output = Self>
     + AddAssign + SubAssign + MulAssign
     + num_traits::Zero + num_traits::One
     + From<u64>

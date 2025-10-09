@@ -8,7 +8,6 @@ pub mod sk;
 pub mod pk;
 pub mod helper;
 pub mod gsw_fp;
-pub mod gsw_boneh;
 pub mod gsw_zpow2;
 
 pub trait FheScheme<R: RingElement> {

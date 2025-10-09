@@ -31,7 +31,7 @@ impl SecretSharingScheme<Fp> for MBF {
 
 #[cfg(test)]
 mod tests {
-    use crate::{error_sampling::rnd_fp_dvec, field::{Fp, P}, zo_sss::{dimacs::{DIMACS, DIMACS_2_OF_3_SCHEME, DIMACS_AB_OR_CD}, SecretSharingScheme, MBF}};
+    use crate::{error_sampling::rnd_dvec, field::{Fp, P}, zo_sss::{dimacs::{DIMACS, DIMACS_2_OF_3_SCHEME, DIMACS_AB_OR_CD}, SecretSharingScheme, MBF}};
 
     #[test]
     fn shamir_struct_test() {
@@ -46,7 +46,7 @@ mod tests {
     }
 
     fn sss_test<T: SecretSharingScheme<Fp>>(scheme: T) {
-        let secrets: Vec<Fp> = rnd_fp_dvec(5, 0, P-1).iter().map(|elm| *elm).collect();
+        let secrets: Vec<Fp> = rnd_dvec(5, 0, P-1).iter().map(|elm| *elm).collect();
         let copy_secrets = secrets.clone();
         let parties = scheme.share(secrets);
         let result = scheme.combine(parties, false);

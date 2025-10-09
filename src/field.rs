@@ -40,7 +40,7 @@ impl RingElement for Fp {
 mod tests {
     use ff::{Field};
     use nalgebra::{DMatrix, DVector};
-    use crate::{error_sampling::rnd_fp, field::{Fp, P}};
+    use crate::{error_sampling::rnd_ring_elm, field::{Fp, P}};
 
     // small heuristic to verify generator
     #[test]
@@ -50,7 +50,7 @@ mod tests {
         assert_eq!(one+minus_one, Fp::ZERO);
 
         for _ in 1..100000 {
-            let rnd = rnd_fp(1, P-1);
+            let rnd = rnd_ring_elm::<Fp>(1, P-1);
             let inverse = rnd.invert().unwrap();
             assert_eq!(rnd * inverse, Fp::ONE);
         }

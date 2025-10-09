@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::{error_sampling::rnd_fp, field::{Fp, P}, zo_sss::{dimacs::DIMACS, Party}};
+use crate::{error_sampling::rnd_ring_elm, field::{Fp, P}, zo_sss::{dimacs::DIMACS, Party}};
 
 /// Secret Sharing via Monotone Boolean Formula Access Structure
 /// Access Structure is fully defined via DIMACS.
@@ -66,13 +66,13 @@ fn build_w_matrix(secrets: Vec<Fp>, num: usize) -> Vec<Vec<Fp>> {
 /// or secret||random vector.
 fn build_w(secret: Fp, num: usize) -> Vec<Fp> {
     let mut v1 = secret;
-    let mut v2 = rnd_fp(0, P - 1);
+    let mut v2: Fp = rnd_ring_elm(0, P - 1);
     let mut w = Vec::with_capacity(num);
 
     for _ in 0..num - 1 {
         w.push(v1 + v2);
         v1 = -v2;
-        v2 = rnd_fp(0, P - 1);
+        v2 = rnd_ring_elm(0, P - 1);
     }
     w.push(v1);
     w
@@ -156,11 +156,11 @@ fn check_sat(parties: &HashSet<u8>, dimacs: &DIMACS) -> bool {
 #[cfg(test)]
 mod tests {
 
-    use crate::{error_sampling::rnd_fp, field::{Fp, P}, zo_sss::{dimacs::{DIMACS, DIMACS_2_OF_3_SCHEME, DIMACS_AB_OR_CD}, mbf::{get_min_party, mbf_combine, mbf_share}}};
+    use crate::{error_sampling::rnd_ring_elm, field::{Fp, P}, zo_sss::{dimacs::{DIMACS, DIMACS_2_OF_3_SCHEME, DIMACS_AB_OR_CD}, mbf::{get_min_party, mbf_combine, mbf_share}}};
 
     #[test]
     fn share_test_two_of_three() {
-        let secret = rnd_fp(0, P-1);
+        let secret = rnd_ring_elm(0, P-1);
         let dimacs = DIMACS::parse(DIMACS_2_OF_3_SCHEME);
         let parties = mbf_share(vec![secret], &dimacs);
         assert_eq!(parties.len(), 3);
@@ -171,7 +171,7 @@ mod tests {
 
     #[test]
     fn share_test_ab_or_cd() {
-        let secret = rnd_fp(0, P-1);
+        let secret = rnd_ring_elm(0, P-1);
         let dimacs = DIMACS::parse(DIMACS_AB_OR_CD);
         let parties = mbf_share(vec![secret], &dimacs);
         assert_eq!(parties.len(), 4);
@@ -182,14 +182,14 @@ mod tests {
 
     #[test]
     fn secret_sharing_2_of_3_test(){
-        let secret = rnd_fp(0, P-1);
+        let secret = rnd_ring_elm(0, P-1);
         let dimacs = DIMACS::parse(DIMACS_2_OF_3_SCHEME);
         execute_mbf_test(secret, &dimacs);
     }
 
     #[test]
     fn secret_sharing_ab_cd_test(){
-        let secret = rnd_fp(0, P-1);
+        let secret = rnd_ring_elm(0, P-1);
         let dimacs = DIMACS::parse(DIMACS_AB_OR_CD);
         execute_mbf_test(secret, &dimacs);
     }
