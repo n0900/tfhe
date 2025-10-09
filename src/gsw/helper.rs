@@ -17,7 +17,7 @@ pub fn bit_decomp<T: RingElement>(a: &mut Vec<T>) {
 pub fn bit_decomp_matrix<T: RingElement + 'static>(a_matrix: &mut DMatrix<T>) {
     let mut vec_of_vec = dmatrix_to_vec_of_vecs(a_matrix);
     vec_of_vec.iter_mut().for_each(|row| bit_decomp(row));
-    *a_matrix = vec_of_vecs_to_dmatrix(vec_of_vec);
+    *a_matrix = vec_of_vecs_to_dmatrix(&vec_of_vec);
 }
 
 /// Only supports inverses up to u64!
@@ -45,7 +45,7 @@ pub fn bit_decomp_inv<T: RingElement>(bits: &mut Vec<T>) {
 pub fn bit_decomp_inv_matrix<T: RingElement + 'static>(a_matrix: &mut DMatrix<T>) {
     let mut vec_of_vec = dmatrix_to_vec_of_vecs(a_matrix);
     vec_of_vec.iter_mut().for_each(|row| bit_decomp_inv(row));
-    *a_matrix = vec_of_vecs_to_dmatrix(vec_of_vec);
+    *a_matrix = vec_of_vecs_to_dmatrix(&vec_of_vec);
 }
 
 pub fn flatten<T: RingElement>(bits: &mut Vec<T>) {
@@ -58,7 +58,7 @@ pub fn flatten<T: RingElement>(bits: &mut Vec<T>) {
 pub fn flatten_matrix<T: RingElement + 'static>(a_matrix: &mut DMatrix<T>) {
     let mut vec_of_vec = dmatrix_to_vec_of_vecs(a_matrix);
     vec_of_vec.iter_mut().for_each(|row| flatten(row));
-    *a_matrix = vec_of_vecs_to_dmatrix(vec_of_vec);
+    *a_matrix = vec_of_vecs_to_dmatrix(&vec_of_vec);
 }
 
 /// PowersOf2: (b_1, 2b_1, ..., 2^{l-1}b_1, ..., b_k, ..., 2^{l-1}b_k)
@@ -78,29 +78,45 @@ pub fn powers_of_2<T: RingElement + 'static>(b: &DVector<T>, gadget_vector: &DVe
 
 
 pub fn dmatrix_to_vec_of_vecs<T: RingElement>(matrix: &DMatrix<T>) -> Vec<Vec<T>> {
-    matrix
-        .as_slice()  
-        .chunks(matrix.ncols()) 
-        .map(|chunk| chunk.to_vec()) 
-        .collect()  
+    let nrows = matrix.nrows();
+    let ncols = matrix.ncols();
+
+    (0..nrows)
+        .map(|r| {
+            // Collect each row into a Vec<T>
+            (0..ncols).map(|c| matrix[(r, c)].clone()).collect()
+        })
+        .collect()
 }
 
-pub fn vec_of_vecs_to_dmatrix<T: RingElement + 'static>(vec_of_vecs: Vec<Vec<T>>) -> DMatrix<T> {
+pub fn vec_of_vecs_to_dmatrix<T: RingElement + Clone + 'static>(vec_of_vecs: &Vec<Vec<T>>) -> DMatrix<T> {
     let nrows = vec_of_vecs.len();
-    let ncols = vec_of_vecs.get(0).map_or(0, |row| row.len()); 
+    let ncols = vec_of_vecs.get(0).map_or(0, |row| row.len());
 
-    let flat_vec: Vec<T> = vec_of_vecs.into_iter().flat_map(|row| row.into_iter()).collect();
+    let flat_vec: Vec<T> = vec_of_vecs
+        .iter()                   
+        .flat_map(|row| row.iter().cloned()) // clone each element
+        .collect();
 
-    DMatrix::from_vec(nrows, ncols, flat_vec)
+    DMatrix::from_row_iterator(nrows, ncols, flat_vec)
 }
 
 
 #[cfg(test)]
 mod tests {
-    use crate::{field::Fp, gsw::build_gadget_vector};
-    use ff::PrimeField;
+    use crate::{error_sampling::rnd_dmatrix, field::Fp, gsw::build_gadget_vector};
     use rand::{Rng};
     use super::*;
+
+    #[test]
+    fn test_dmatrix_to_vecvec() {
+        let matrix: DMatrix<Fp> = rnd_dmatrix(5, 6, 0, 10);
+        let vecvec = dmatrix_to_vec_of_vecs(&matrix);
+        assert_eq!(vecvec.len(), 5);
+        assert_eq!(vecvec.first().unwrap().len(), 6);
+        let reconstructed = vec_of_vecs_to_dmatrix(&vecvec);
+        assert_eq!(matrix, reconstructed);
+    }
 
     #[test]
     fn test_bit_decomp_and_inv() {
@@ -118,7 +134,7 @@ mod tests {
             assert_eq!(reconstructed.len(), input.len());
             assert_eq!(input, reconstructed);
 
-            let matrix = vec_of_vecs_to_dmatrix(vec![vec![Fp::from(2u64),Fp::from(2u64)],vec![Fp::from(2u64),Fp::from(2u64)]]);
+            let matrix = vec_of_vecs_to_dmatrix(&vec![vec![Fp::from(2u64),Fp::from(2u64)],vec![Fp::from(2u64),Fp::from(2u64)]]);
             let mut decomp_matrix = matrix.clone();
             bit_decomp_matrix(&mut decomp_matrix);
             assert_ne!(matrix, decomp_matrix);
