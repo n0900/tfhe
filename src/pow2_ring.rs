@@ -1,10 +1,10 @@
-use std::fmt;
+use std::{fmt, u64};
 use std::iter::Sum;
 use std::ops::{Add, Sub, Mul, Neg};
 use std::ops::{AddAssign, SubAssign, MulAssign};
 
 use ff::derive::bitvec::array::BitArray;
-use num_traits::Zero;
+use num_traits::{Bounded, Zero};
 
 use crate::RingElement;
 
@@ -18,7 +18,7 @@ pub struct Zpow2<const M: u64> {
 impl<const M: u64> RingElement for Zpow2<M> {
     const Num_Bits: usize = M as usize;
 
-    fn to_le_bits(&self) -> BitArray<[u8; 8]> {
+    fn to_le_bits_re(&self) -> BitArray<[u8; 8]> {
         let mut bit_array = BitArray::<[u8; 8]>::default();
 
         for i in 0..M {
@@ -27,6 +27,9 @@ impl<const M: u64> RingElement for Zpow2<M> {
         }
 
         bit_array
+    }
+    fn max_u64() -> u64 {
+        Self::max_value().value
     }
 }
 
@@ -162,6 +165,21 @@ impl<const M: u64> Sum<Zpow2<M>> for Zpow2<M> {
         iter.fold(Zpow2::zero(), |acc, x| acc + x)
     }
 }
+
+impl<const M: u64> Bounded for Zpow2<M> {
+    fn min_value() -> Self {
+        Self::zero()
+    }
+
+    fn max_value() -> Self {
+        if M < 64 {
+            Self::from((1u64 << M) - 1)
+        } else {
+            Self::from(u64::MAX)
+        }
+    }
+}
+
 
 #[cfg(test)]
 mod tests {

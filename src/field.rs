@@ -1,5 +1,6 @@
 use ff::{derive::{bitvec::{array::BitArray}, subtle::ConstantTimeEq}, Field, PrimeField, PrimeFieldBits};
 use nalgebra::DVector;
+use num_traits::Bounded;
 use once_cell::sync::Lazy;
 
 use crate::RingElement;
@@ -30,17 +31,33 @@ impl num_traits::One for Fp {
 }
 
 impl RingElement for Fp {
-    fn to_le_bits(&self) -> BitArray<[u8;8]> {
+    fn to_le_bits_re(&self) -> BitArray<[u8;8]> {
         PrimeFieldBits::to_le_bits(self)
+    }
+
+    fn max_u64() -> u64 {
+        u64::from_le_bytes(Self::max_value().to_repr().0)
     }
     const Num_Bits: usize = Fp::NUM_BITS as usize;
 }
+
+impl Bounded for Fp {
+    fn min_value() -> Self {
+        Self::ZERO
+    }
+
+    fn max_value() -> Self {
+        Self::from(P-1)
+    }
+}
+
 
 #[cfg(test)]
 mod tests {
     use ff::{Field, PrimeFieldBits};
     use nalgebra::{DMatrix, DVector};
-    use crate::{error_sampling::rnd_ring_elm, field::{Fp, P}};
+    use num_traits::Bounded;
+    use crate::{error_sampling::rnd_ring_elm, field::{Fp, P}, RingElement};
 
     // small heuristic to verify generator
     #[test]
@@ -54,6 +71,12 @@ mod tests {
             let inverse = rnd.invert().unwrap();
             assert_eq!(rnd * inverse, Fp::ONE);
         }
+    }
+
+    #[test]
+    fn test_constants() {
+        assert_eq!(Fp::min_value(), Fp::ZERO);
+        assert_eq!(Fp::max_u64(), P-1);
     }
 
     #[test]

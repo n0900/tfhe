@@ -16,10 +16,10 @@ pub struct GswSk<R: RingElement> {
     pub v: DVector<R>,
 }
 
-impl GswSk<Fp> {
-    pub fn new(t: DVector<Fp>) -> Self {
-        let mut s = DVector::zeros(t.len() + 1);
-        s[0] = Fp::ONE;
+impl<R: RingElement + 'static> GswSk<R> {
+    pub fn new(t: DVector<R>) -> Self {
+        let mut s: nalgebra::Matrix<R, nalgebra::Dyn, nalgebra::Const<1>, nalgebra::VecStorage<R, nalgebra::Dyn, nalgebra::Const<1>>> = DVector::zeros(t.len() + 1);
+        s[0] = R::one();
 
         s.rows_mut(1, t.len()).copy_from(&(-t.clone()));
 
@@ -36,7 +36,7 @@ mod tests {
 
     #[test]
     fn test_v_decomp() {
-        let sk = GswSk::new(rnd_dvec(5, 0, 10));
+        let sk: GswSk<Fp> = GswSk::new(rnd_dvec(5, 0, 10));
 
         for i in 0..Fp::Num_Bits {
             assert_eq!(sk.v[i], Fp::from(1<<i));

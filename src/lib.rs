@@ -1,6 +1,7 @@
 use std::{iter::Sum, marker::PhantomData, ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign}};
 
 use ff::{derive::bitvec::array::BitArray};
+use num_traits::Bounded;
 
 use crate::{field::Fp, gsw::{FheScheme}, zo_sss::{Party, SecretSharingScheme}};
 
@@ -17,11 +18,12 @@ pub trait RingElement:
     + Mul<Output = Self> + Neg<Output = Self>
     + AddAssign + SubAssign + MulAssign
     + num_traits::Zero + num_traits::One
-    + From<u64> + Ord
+    + From<u64> + Ord + Bounded
 where
     for<'a> Self: Sum<&'a Self>,
 {
-    fn to_le_bits(&self) -> BitArray<[u8;8]>;
+    fn to_le_bits_re(&self) -> BitArray<[u8;8]>;
+    fn max_u64() -> u64;
     const Num_Bits: usize;
 }
 

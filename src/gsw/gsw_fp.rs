@@ -1,32 +1,32 @@
-use ff::{Field, PrimeField};
+use ff::{Field};
 use nalgebra::{DMatrix, DVector};
 
 use crate::{
-    error_sampling::{rnd_dmatrix, rnd_dvec, ErrorSampling}, field::{Fp, P}, gsw::{helper::{bit_decomp_inv_matrix, bit_decomp_matrix, flatten_matrix}, pk::GswPk, sk::GswSk, FheScheme, GSW}, RingElement
+    error_sampling::{rnd_dmatrix, rnd_dvec, ErrorSampling}, field::{Fp, P}, gsw::{helper::{bit_decomp_matrix, flatten_matrix}, pk::GswPk, sk::GswSk, FheScheme, GSW}, RingElement
 };
 
-impl<T: ErrorSampling<Fp>> FheScheme<Fp> for GSW<Fp, T> {
-    type SecretKey = GswSk<Fp>;
-    type PublicKey = GswPk;
-    type Ciphertext = DMatrix<Fp>;
+impl<R: RingElement + 'static, T: ErrorSampling<R>> FheScheme<R> for GSW<R, T> {
+    type SecretKey = GswSk<R>;
+    type PublicKey = GswPk<R>;
+    type Ciphertext = DMatrix<R>;
 
     fn keygen(&self) -> (Self::SecretKey, Self::PublicKey) {
         let sk = GswSk::new(rnd_dvec(self.n as usize, 0, P-1));  
           
-        let err: DVector<Fp> = self.err_sampling.rnd_error_dvec(self.m as usize);    
-        let random_matrix: DMatrix<Fp> = rnd_dmatrix(self.m, self.n, 0, P-1);
+        let err: DVector<R> = self.err_sampling.rnd_error_dvec(self.m as usize);    
+        let random_matrix: DMatrix<R> = rnd_dmatrix(self.m, self.n, 0, P-1);
         
         let pk = GswPk::new(&random_matrix, &err, &sk.t);
         (sk, pk)   
     }
 
-    fn encrypt(&self, pk: &Self::PublicKey, message: Fp) -> Self::Ciphertext {
+    fn encrypt(&self, pk: &Self::PublicKey, message: R) -> Self::Ciphertext {
         // #[cfg(feature="use_flatten")]
-        let big_n: usize = (Fp::Num_Bits as usize) * ((self.n + 1) as usize);
+        let big_n: usize = (R::Num_Bits as usize) * ((self.n + 1) as usize);
         // #[cfg(not(feature="use_flatten"))]
         // let big_n: usize = (self.n + 1) as usize;
 
-        //(0..big_n).map(|_| rnd_fp_dvec(self.m as usize, 0, 1)).collect();
+        //(0..big_n).map(|_| rnd_R_dvec(self.m as usize, 0, 1)).collect();
         let random_matrix = rnd_dmatrix(big_n, self.m, 0, 1);
         let mut product = &random_matrix * &pk.pk_matrix;
         bit_decomp_matrix(&mut product);
@@ -36,7 +36,7 @@ impl<T: ErrorSampling<Fp>> FheScheme<Fp> for GSW<Fp, T> {
         }
         // #[cfg(not(feature="use_flatten"))]
         // {
-        //     let mut test = DMatrix::identity((self.n + 1) * Fp::Num_Bits, (self.n + 1) * Fp::Num_Bits) * message;
+        //     let mut test = DMatrix::identity((self.n + 1) * R::Num_Bits, (self.n + 1) * R::Num_Bits) * message;
         //     bit_decomp_inv_matrix(&mut test);
         //     product += test
         // }
@@ -50,15 +50,15 @@ impl<T: ErrorSampling<Fp>> FheScheme<Fp> for GSW<Fp, T> {
 
 
     // sk.v[i] == 2^{i-1} bc the first entry of s is 1 by definition and v = pow2(s)
-    fn decrypt(&self, sk: &Self::SecretKey, ciphertext: &Self::Ciphertext) -> Fp {
-        let i = Fp::Num_Bits -1;
+    fn decrypt(&self, sk: &Self::SecretKey, ciphertext: &Self::Ciphertext) -> R {
+        let i = R::Num_Bits -1;
         let cipher_row_dot_prod = ciphertext.row(i).transpose().dot(&sk.v);
-        if cipher_row_dot_prod >= Fp::from(P/4) && cipher_row_dot_prod <= Fp::from(3*P/4)  {
-            Fp::ONE
-        } else { Fp:: ZERO }
+        if cipher_row_dot_prod >= R::from(R::max_u64()/4) && cipher_row_dot_prod <= R::from(3*R::max_u64()/4)  {
+            R::one()
+        } else { R::zero() }
     }
 
-    fn mp_decrypt(&self, _sk: &Self::SecretKey, _ciphertext: &Self::Ciphertext) -> Fp {
+    fn mp_decrypt(&self, _sk: &Self::SecretKey, _ciphertext: &Self::Ciphertext) -> R {
         panic!("Only supported for pow2 rings!")
         // let test = mult_matrix_vector_fp(&ciphertext, &sk.v);
         // let mut out: u64 = 0;
@@ -87,7 +87,7 @@ impl<T: ErrorSampling<Fp>> FheScheme<Fp> for GSW<Fp, T> {
     }
 
     // flatten(C*a)
-    fn mult_const(&self, ciphertext: &mut Self::Ciphertext, constant: Fp) {
+    fn mult_const(&self, ciphertext: &mut Self::Ciphertext, constant: R) {
         *ciphertext *= constant;
         #[cfg(feature="use_flatten")]
         flatten_matrix(ciphertext);
@@ -110,7 +110,7 @@ impl<T: ErrorSampling<Fp>> FheScheme<Fp> for GSW<Fp, T> {
         prod.neg_mut();
         // add_to_diagonal(&mut prod, Fp::ONE);
         for i in 0..prod.ncols() {
-            prod[(i, i)] += Fp::ONE;
+            prod[(i, i)] += R::one();
         } 
         #[cfg(feature="use_flatten")]
         flatten_matrix(&mut prod);
@@ -143,7 +143,7 @@ mod tests {
         let n = 10;
         let m = 5;
 
-        let sk = GswSk::new(rnd_dvec(n, 0, P-1));
+        let sk: GswSk<Fp> = GswSk::new(rnd_dvec(n, 0, P-1));
         let err = rnd_dvec(m, 0, P/2);
         // let random_matrix: Vec<Vec<Fp>> = (0..err.len()).map(|_| rnd_fp_dvec(n, 0, P-1)).collect();
         let random_matrix = rnd_dmatrix(err.len(), n, 0, P-1);

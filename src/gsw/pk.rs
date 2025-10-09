@@ -1,6 +1,6 @@
 use nalgebra::{DMatrix, DVector};
 
-use crate::{field::Fp};
+use crate::{field::Fp, RingElement};
 
 
 /// Contains all components used in generating the public key.
@@ -10,20 +10,20 @@ use crate::{field::Fp};
 /// 
 #[derive(PartialEq)]
 #[derive(Debug)]
-pub struct GswPk {
-    pub b: DVector<Fp>,
-    pub pk_matrix: DMatrix<Fp>
+pub struct GswPk<R: RingElement> {
+    pub b: DVector<R>,
+    pub pk_matrix: DMatrix<R>
 }
 
 
 /// B mxn-dim random matrix \in \mathbb(Z)_p
 /// e error vector \in \mathbb(Z)_p
 /// t == SK.t
-impl GswPk {
-    pub fn new(random_matrix: &DMatrix<Fp>, e: &DVector<Fp>, t: &DVector<Fp>) -> Self {
+impl<R: RingElement + 'static> GswPk<R> {
+    pub fn new(random_matrix: &DMatrix<R>, e: &DVector<R>, t: &DVector<R>) -> Self {
         assert_eq!(random_matrix.ncols(), t.len(), "Dimension Mismatch ncols {}, {}", random_matrix.ncols(), t.len());
         assert_eq!(random_matrix.nrows(), e.len(), "Dimension Mismatch nrows {}, {}", random_matrix.nrows(), e.len());
-        let b: DVector<Fp> = random_matrix * t + e;
+        let b: DVector<R> = random_matrix * t + e;
 
         let mut pk_matrix = DMatrix::zeros(random_matrix.nrows(), random_matrix.ncols() + 1);
 

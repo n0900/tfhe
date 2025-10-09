@@ -7,7 +7,7 @@ use nalgebra::{DMatrix, DVector};
 pub fn bit_decomp<T: RingElement>(a: &mut Vec<T>) {
     let mut tmp = Vec::with_capacity(a.len() * T::Num_Bits);
     for elm in a.drain(..) {
-        tmp.extend(elm.to_le_bits().iter().take(T::Num_Bits).map(|b| if *b { T::one() } else { T::zero() }));
+        tmp.extend(elm.to_le_bits_re().iter().take(T::Num_Bits).map(|b| if *b { T::one() } else { T::zero() }));
     }
     *a = tmp;
 }
