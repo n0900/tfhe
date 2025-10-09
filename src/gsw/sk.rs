@@ -1,9 +1,9 @@
 use ff::Field;
 use nalgebra::DVector;
 
-use crate::field::{Fp, GADGET_VECTOR};
+use crate::field::{Fp};
 use crate::gsw::helper::powers_of_2;
-use crate::gsw::RingElement;
+use crate::gsw::{build_gadget_vector, RingElement};
 
 
 /// Contains all components of a private key. 
@@ -23,7 +23,7 @@ impl GswSk<Fp> {
 
         s.rows_mut(1, t.len()).copy_from(&(-t.clone()));
 
-        let v = powers_of_2(&s, &GADGET_VECTOR);
+        let v = powers_of_2(&s, &build_gadget_vector());
         Self { t, s, v }
     }
 }

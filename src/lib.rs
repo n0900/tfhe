@@ -1,8 +1,8 @@
 use std::{marker::PhantomData, ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign}};
 
-use ff::{derive::bitvec::array::BitArray, PrimeField, PrimeFieldBits};
+use ff::{derive::bitvec::array::BitArray};
 
-use crate::{error_sampling::ErrorSampling, field::Fp, gsw::{FheScheme, GSW}, pow2_ring::Zpow2, zo_sss::{Party, SecretSharingScheme}};
+use crate::{field::Fp, gsw::{FheScheme}, zo_sss::{Party, SecretSharingScheme}};
 
 pub mod field;
 pub mod gsw;

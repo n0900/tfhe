@@ -97,16 +97,10 @@ pub fn vec_of_vecs_to_dmatrix<T: RingElement + 'static>(vec_of_vecs: Vec<Vec<T>>
 
 #[cfg(test)]
 mod tests {
-    use crate::field::GADGET_VECTOR;
-    use crate::field::Fp;
+    use crate::{field::Fp, gsw::build_gadget_vector};
     use ff::PrimeField;
     use rand::{Rng};
     use super::*;
-
-    #[test]
-    fn gadget_vector_has_correct_size() {
-        assert_eq!(GADGET_VECTOR.len(), Fp::NUM_BITS as usize)
-    }
 
     #[test]
     fn test_bit_decomp_and_inv() {
@@ -143,7 +137,7 @@ mod tests {
 
             let mut bd_a = a.clone();
             bit_decomp(&mut bd_a);
-            let po2_b = powers_of_2(&DVector::from_vec(b.clone()), &GADGET_VECTOR);
+            let po2_b = powers_of_2(&DVector::from_vec(b.clone()), &build_gadget_vector());
             assert_eq!(bd_a.len(), po2_b.len(), "Length mismatch in decomp vs powers_of_two.");
 
             let dot_decomp = DVector::from_vec(bd_a).dot(&po2_b);

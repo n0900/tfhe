@@ -19,13 +19,6 @@ use crate::RingElement;
 pub struct Fp([u64; 1]);
 pub const P: u64 = 2147483647;
 
-pub static GADGET_VECTOR: Lazy<DVector<Fp>> = Lazy::new(|| {
-    DVector::from_vec((0..Fp::NUM_BITS)
-        .map(|l| Fp::from(1u64 << l))
-        .collect())
-});
-
-
 // Provide num-traits Zero/One (nalgebra expects num_traits types)
 impl num_traits::Zero for Fp {
     fn zero() -> Self { Fp::ZERO }
