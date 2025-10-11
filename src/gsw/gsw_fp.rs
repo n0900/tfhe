@@ -1,9 +1,11 @@
-use ff::{Field};
 use nalgebra::{DMatrix, DVector};
 
 use crate::{
-    error_sampling::{rnd_dmatrix, rnd_dvec, ErrorSampling}, field::{Fp, P}, gsw::{helper::{bit_decomp_matrix, flatten_matrix}, pk::GswPk, sk::GswSk, FheScheme, GSW}, RingElement
+    error_sampling::{rnd_dmatrix, rnd_dvec, ErrorSampling}, gsw::{helper::bit_decomp_matrix, pk::GswPk, sk::GswSk, FheScheme, GSW}, RingElement
 };
+
+#[cfg(feature="use_flatten")]
+use crate::{gsw::helper::flatten_matrix};
 
 impl<R: RingElement + 'static, T: ErrorSampling<R>> FheScheme<R> for GSW<R, T> {
     type SecretKey = GswSk<R>;
@@ -11,10 +13,10 @@ impl<R: RingElement + 'static, T: ErrorSampling<R>> FheScheme<R> for GSW<R, T> {
     type Ciphertext = DMatrix<R>;
 
     fn keygen(&self) -> (Self::SecretKey, Self::PublicKey) {
-        let sk = GswSk::new(rnd_dvec(self.n as usize, 0, P-1));  
+        let sk = GswSk::new(rnd_dvec(self.n as usize, 0, R::max_u64()));  
           
         let err: DVector<R> = self.err_sampling.rnd_error_dvec(self.m as usize);    
-        let random_matrix: DMatrix<R> = rnd_dmatrix(self.m, self.n, 0, P-1);
+        let random_matrix: DMatrix<R> = rnd_dmatrix(self.m, self.n, 0, R::max_u64());
         
         let pk = GswPk::new(&random_matrix, &err, &sk.t);
         (sk, pk)   
@@ -123,19 +125,16 @@ impl<R: RingElement + 'static, T: ErrorSampling<R>> FheScheme<R> for GSW<R, T> {
 mod tests {
     use std::marker::PhantomData;
 
-    use ff::{Field};
-    use rand::Rng;
-
     use crate::error_sampling::rnd_dmatrix;
     use crate::error_sampling::rnd_dvec;
     use crate::error_sampling::DiscrGaussianSampler;
     use crate::error_sampling::NaiveSampler;
     use crate::field::Fp;
-    use crate::field::P;
     use crate::gsw::pk::GswPk;
     use crate::gsw::FheScheme;
     use crate::gsw::sk::GswSk;
     use crate::gsw::GSW;
+    use crate::pow2_ring::Zpow2;
     use crate::RingElement;
 
     #[test]
@@ -143,10 +142,10 @@ mod tests {
         let n = 10;
         let m = 5;
 
-        let sk: GswSk<Fp> = GswSk::new(rnd_dvec(n, 0, P-1));
-        let err = rnd_dvec(m, 0, P/2);
+        let sk: GswSk<Fp> = GswSk::new(rnd_dvec(n, 0, Fp::max_u64()));
+        let err = rnd_dvec(m, 0, Fp::max_u64()>>15);
         // let random_matrix: Vec<Vec<Fp>> = (0..err.len()).map(|_| rnd_fp_dvec(n, 0, P-1)).collect();
-        let random_matrix = rnd_dmatrix(err.len(), n, 0, P-1);
+        let random_matrix = rnd_dmatrix(err.len(), n, 0, Fp::max_u64());
         let pk = GswPk::new(&random_matrix, &err, &sk.t);
         let invariant = &pk.pk_matrix * &sk.s;
 
@@ -168,7 +167,7 @@ mod tests {
 
     #[test]
     fn encryption_decryption_discr_gaussian() {
-        let gaussian_gsw = GSW::<Fp, DiscrGaussianSampler> {
+        let gaussian_gsw = GSW::<Zpow2<30>, DiscrGaussianSampler> {
             n:10, 
             m: 10*Fp::Num_Bits, 
             err_sampling: DiscrGaussianSampler::default(), 
@@ -206,15 +205,15 @@ mod tests {
     //     }
     // }
 
-    fn test_inputs<T: FheScheme<Fp>>(fhe: T) {
+    fn test_inputs<R: RingElement + 'static, T: FheScheme<R>>(fhe: T) {
         let (sk, pk) = fhe.keygen();
 
-        let mut encr = fhe.encrypt(&pk, Fp::ZERO);
+        let mut encr = fhe.encrypt(&pk, R::zero());
         let decr = fhe.decrypt(&sk, &mut encr);
-        assert_eq!(decr, Fp::ZERO);
+        assert_eq!(decr, R::zero());
 
-        let mut encr = fhe.encrypt(&pk, Fp::ONE);
+        let mut encr = fhe.encrypt(&pk, R::one());
         let decr = fhe.decrypt(&sk, &mut encr);
-        assert_eq!(decr, Fp::ONE);
+        assert_eq!(decr, R::one());
     }
 }
