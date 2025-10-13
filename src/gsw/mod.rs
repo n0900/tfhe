@@ -7,8 +7,7 @@ use crate::{error_sampling::{ErrorSampling, NaiveSampler}, field::{Fp}, RingElem
 pub mod sk;
 pub mod pk;
 pub mod helper;
-pub mod gsw_fp;
-pub mod gsw_zpow2;
+pub mod gsw_impl;
 
 pub trait FheScheme<R: RingElement> {
     type SecretKey;
