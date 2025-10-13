@@ -1,7 +1,9 @@
+use std::any::TypeId;
+
 use nalgebra::{DMatrix, DVector};
 
 use crate::{
-    error_sampling::{rnd_dmatrix, rnd_dvec, ErrorSampling}, gsw::{helper::bit_decomp_matrix, pk::GswPk, sk::GswSk, FheScheme, GSW}, RingElement
+    error_sampling::{rnd_dmatrix, rnd_dvec, ErrorSampling}, field::Fp, gsw::{helper::bit_decomp_matrix, pk::GswPk, sk::GswSk, FheScheme, GSW}, RingElement
 };
 
 #[cfg(feature="use_flatten")]
@@ -23,12 +25,8 @@ impl<R: RingElement + 'static, T: ErrorSampling<R>> FheScheme<R> for GSW<R, T> {
     }
 
     fn encrypt(&self, pk: &Self::PublicKey, message: R) -> Self::Ciphertext {
-        // #[cfg(feature="use_flatten")]
         let big_n: usize = (R::Num_Bits as usize) * ((self.n + 1) as usize);
-        // #[cfg(not(feature="use_flatten"))]
-        // let big_n: usize = (self.n + 1) as usize;
 
-        //(0..big_n).map(|_| rnd_R_dvec(self.m as usize, 0, 1)).collect();
         let random_matrix = rnd_dmatrix(big_n, self.m, 0, 1);
         let mut product = &random_matrix * &pk.pk_matrix;
         bit_decomp_matrix(&mut product);
@@ -36,13 +34,6 @@ impl<R: RingElement + 'static, T: ErrorSampling<R>> FheScheme<R> for GSW<R, T> {
         for i in 0..product.ncols() {
             product[(i, i)] += message;
         }
-        // #[cfg(not(feature="use_flatten"))]
-        // {
-        //     let mut test = DMatrix::identity((self.n + 1) * R::Num_Bits, (self.n + 1) * R::Num_Bits) * message;
-        //     bit_decomp_inv_matrix(&mut test);
-        //     product += test
-        // }
-        // #[cfg(feature="use_flatten")]
 
         #[cfg(feature="use_flatten")]
         flatten_matrix(&mut product);
@@ -51,31 +42,45 @@ impl<R: RingElement + 'static, T: ErrorSampling<R>> FheScheme<R> for GSW<R, T> {
     }
 
 
-    // sk.v[i] == 2^{i-1} bc the first entry of s is 1 by definition and v = pow2(s)
+    /**  
+     * sk.v[i] == 2^{i-1} bc the first entry of s is 1 by definition and v = pow2(s)
+     */
     fn decrypt(&self, sk: &Self::SecretKey, ciphertext: &Self::Ciphertext) -> R {
         let i = R::Num_Bits -1;
         let cipher_row_dot_prod = ciphertext.row(i).transpose().dot(&sk.v);
-        if cipher_row_dot_prod >= R::from(R::max_u64()/4) && cipher_row_dot_prod <= R::from(3*R::max_u64()/4)  {
-            R::one()
-        } else { R::zero() }
+        is_zero_one(cipher_row_dot_prod)
     }
 
-    fn mp_decrypt(&self, _sk: &Self::SecretKey, _ciphertext: &Self::Ciphertext) -> R {
-        panic!("Only supported for pow2 rings!")
-        // let test = mult_matrix_vector_fp(&ciphertext, &sk.v);
-        // let mut out: u64 = 0;
-        // let mut i = 0;
 
-        // // collect LSBs
-        // for entry in test.iter().rev() {
-        //     out ^= entry.to_le_bits()[i] as u64;
-        //     i+=1;
-        //     if i>= L {
-        //         break;
-        //     }
-        // }
+    /**
+     * collect LSBs
+     * Let t_{l-1} denote the last element of slice. then this contains
+     * 2^{l-1} * mu + noise
+     * It holds that 
+     * 2^{l-1} * mu = mu_1 mod 2^l 
+     * where mu_1 is the LSB.
+     * Following this logic it holds that
+     * mu_2 = t_{l-2} - 2^{l-2} mu_1
+     * <==> mu_2 = t_{l-2} - recovered_bits << l-2
+     * etc.
+     */
+    fn mp_decrypt(&self, sk: &Self::SecretKey, ciphertext: &Self::Ciphertext) -> R {
+        if TypeId::of::<R>() == TypeId::of::<Fp>() {
+            panic!("Only supported for pow2 rings!");
+        } else {
+            let product = ciphertext * &sk.v;
+            let slice = &product.as_slice()[..R::Num_Bits];
+            let mut recovered_bits: u64 = 0;
+            let mut recovered_exp;
+            let mut current_exp;
 
-        // Fp::from(out)
+            for (i,entry) in slice.into_iter().rev().enumerate() {
+                recovered_exp = R::from(recovered_bits << (R::Num_Bits - i - 1));
+                current_exp = *entry - recovered_exp;
+                recovered_bits ^= (is_zero_one(current_exp).is_one() as u64) << i;
+            }
+            R::from(recovered_bits)
+        }        
     }
 
     // flatten(C1+C2)
@@ -108,9 +113,7 @@ impl<R: RingElement + 'static, T: ErrorSampling<R>> FheScheme<R> for GSW<R, T> {
     // flatten(I - C1*C2)
     fn nand(&self, ciphertext1: &Self::Ciphertext, cipertext2: &Self::Ciphertext) -> Self::Ciphertext {
         let mut prod = ciphertext1 * cipertext2;
-        // negate_matrix_fp(&mut prod);
         prod.neg_mut();
-        // add_to_diagonal(&mut prod, Fp::ONE);
         for i in 0..prod.ncols() {
             prod[(i, i)] += R::one();
         } 
@@ -118,12 +121,19 @@ impl<R: RingElement + 'static, T: ErrorSampling<R>> FheScheme<R> for GSW<R, T> {
         flatten_matrix(&mut prod);
         prod
     }
+
 }
 
+fn is_zero_one<R: RingElement>(input: R) -> R {
+    if input >= R::from(R::max_u64()/4) && input <= R::from(3*R::max_u64()/4)  {
+        R::one()
+    } else { R::zero() }
+}
 
 #[cfg(test)]
 mod tests {
     use std::marker::PhantomData;
+    use rand::Rng;
 
     use crate::error_sampling::rnd_dmatrix;
     use crate::error_sampling::rnd_dvec;
@@ -140,11 +150,10 @@ mod tests {
     #[test]
     fn sk_pk_invariant() {
         let n = 10;
-        let m = 5;
+        let m = 10 * Fp::Num_Bits;
 
         let sk: GswSk<Fp> = GswSk::new(rnd_dvec(n, 0, Fp::max_u64()));
         let err = rnd_dvec(m, 0, Fp::max_u64()>>15);
-        // let random_matrix: Vec<Vec<Fp>> = (0..err.len()).map(|_| rnd_fp_dvec(n, 0, P-1)).collect();
         let random_matrix = rnd_dmatrix(err.len(), n, 0, Fp::max_u64());
         let pk = GswPk::new(&random_matrix, &err, &sk.t);
         let invariant = &pk.pk_matrix * &sk.s;
@@ -169,7 +178,7 @@ mod tests {
     fn encryption_decryption_discr_gaussian() {
         let gaussian_gsw = GSW::<Zpow2<30>, DiscrGaussianSampler> {
             n:10, 
-            m: 10*Fp::Num_Bits, 
+            m: 10*Zpow2::<30>::Num_Bits, 
             err_sampling: DiscrGaussianSampler::default(), 
             _marker: PhantomData
         };
@@ -177,33 +186,25 @@ mod tests {
     }
 
 
-    // #[test]
-    // fn encryption_decryption_pow_of_two() {
-    //     let fhe = GSW::<Fp, DiscrGaussianSampler> {
-    //         n:10, 
-    //         m: 5, 
-    //         err_sampling: DiscrGaussianSampler::default(),
-    //         _marker: PhantomData 
-    //     };
+    #[test]
+    fn encryption_decryption_pow_of_two() {
+        let fhe = GSW::<Zpow2<31>, DiscrGaussianSampler> {
+            n:10, 
+            m: 10 * Zpow2::<31>::Num_Bits, 
+            err_sampling: DiscrGaussianSampler::default(),
+            _marker: PhantomData 
+        };
         
-    //     let (sk, pk) = fhe.keygen();
+        let (sk, pk) = fhe.keygen();
 
-    //     let encr = fhe.encrypt(&pk, Fp::ZERO);
-    //     let decr = fhe.mp_decrypt(&sk, &encr);
-    //     assert_eq!(decr, Fp::ZERO);
-
-    //     let encr = fhe.encrypt(&pk, Fp::ONE);
-    //     let decr = fhe.mp_decrypt(&sk, &encr);
-    //     assert_eq!(decr, Fp::ONE);
-
-    //     let mut rng = rand::rng();
-    //     for _ in 0..10 {
-    //         let msg = Fp::from(1u64<<rng.random_range(0..Fp::Num_Bits-1));
-    //         let encr = fhe.encrypt(&pk, msg);
-    //         let decr = fhe.mp_decrypt(&sk, &encr);
-    //         assert_eq!(decr, msg);
-    //     }
-    // }
+        let mut rng = rand::rng();
+        for _ in 0.. 20 {
+            let msg = Zpow2::<31>::from(rng.random_range(0..Zpow2::<31>::max_u64()));
+            let encr = fhe.encrypt(&pk, msg);
+            let decr = fhe.mp_decrypt(&sk, &encr);
+            assert_eq!(decr, msg, "{:064b} vs {:064b}", decr.value(), msg.value());
+        }
+    }
 
     fn test_inputs<R: RingElement + 'static, T: FheScheme<R>>(fhe: T) {
         let (sk, pk) = fhe.keygen();

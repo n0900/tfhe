@@ -144,6 +144,13 @@ impl<const M: u64> num_traits::One for Zpow2<M> {
 impl<const M: u64> From<u64> for Zpow2<M> {
     fn from(x: u64) -> Self { Self::new(x) }
 }
+
+impl<const M: u64> Into<u64> for Zpow2<M> {
+    fn into(self) -> u64 {
+        self.value
+    }
+}
+
 impl<const M: u64> fmt::Display for Zpow2<M> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.value)

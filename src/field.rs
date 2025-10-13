@@ -1,7 +1,5 @@
 use ff::{derive::{bitvec::{array::BitArray}, subtle::ConstantTimeEq}, Field, PrimeField, PrimeFieldBits};
-use nalgebra::DVector;
 use num_traits::Bounded;
-use once_cell::sync::Lazy;
 
 use crate::RingElement;
 
@@ -48,6 +46,12 @@ impl Bounded for Fp {
 
     fn max_value() -> Self {
         Self::from(P-1)
+    }
+}
+
+impl Into<u64> for Fp {
+    fn into(self) -> u64 {
+        u64::from_le_bytes(self.to_le_bits().data)
     }
 }
 

@@ -19,6 +19,7 @@ pub trait RingElement:
     + AddAssign + SubAssign + MulAssign
     + num_traits::Zero + num_traits::One
     + From<u64> + Ord + Bounded
+    + Into<u64>
 where
     for<'a> Self: Sum<&'a Self>,
 {
